@@ -88,7 +88,7 @@ export function normalized(row,kind,category,sourceId){
  const clean=title.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]/gu,' ').replace(/\s+/g,' ').trim();
  const dedupe=kind!=='live'&&tmdb_id?'tmdb:'+kind+':'+tmdb_id:kind!=='live'&&year?'title:'+kind+':'+clean+':'+year:'origin:'+sourceId+':'+kind+':'+external_id;
  const cover=String(row.cover||row.stream_icon||'');
- return {external_id:String(external_id),title,kind,category:String(category||'عام').slice(0,100),release_year:year,tmdb_id,poster_url:cover.startsWith('https://')?cover.slice(0,2000):null,dedupe_key:digest(dedupe)};
+ return {external_id:String(external_id),title,kind,category:String(category||'عام').slice(0,100),release_year:year,tmdb_id,poster_url:cover.startsWith('https://')?cover.slice(0,2000):null,dedupe_key:digest(dedupe),container_extension:['mp4','mkv','avi','ts','m3u8'].includes(String(row.container_extension||'').toLowerCase())?String(row.container_extension).toLowerCase():null};
 }
 export function xtreamOverview(result){
  const x=result?.user_info;if(Number(x?.auth)!==1)throw error('حساب Xtream غير مصرح أو بياناته غير صحيحة',401);
@@ -281,7 +281,7 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
    const rows=await query('catalog',{where:'?select=id,dedupe_key&dedupe_key=in.('+distinct.map(x=>x.dedupe_key).join(',')+')&limit=200'});
    const map=new Map(rows.map(x=>[x.dedupe_key,x.id]));
    if(distinct.some(x=>!map.has(x.dedupe_key)))throw error('فشل ربط الكتالوج بالمصدر',502);
-   await query('source_items',{method:'POST',where:'?on_conflict=source_id,kind,external_id',body:items.map(x=>({source_id:id,catalog_id:map.get(x.dedupe_key),kind,external_id:x.external_id,category:x.category,last_seen_at:now})),prefer:'resolution=merge-duplicates,return=minimal'});
+   await query('source_items',{method:'POST',where:'?on_conflict=source_id,kind,external_id',body:items.map(x=>({source_id:id,catalog_id:map.get(x.dedupe_key),kind,external_id:x.external_id,category:x.category,container_extension:x.container_extension,last_seen_at:now})),prefer:'resolution=merge-duplicates,return=minimal'});
   }
   const countsData=await apiRequest('/rest/v1/rpc/akkad_source_counts',{method:'POST',token:a.token,body:{p_source:id}});
   const counts=Array.isArray(countsData)?countsData[0]:countsData;
