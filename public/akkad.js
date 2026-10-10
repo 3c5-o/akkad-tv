@@ -178,7 +178,7 @@ function refreshUser(){
  if(!currentSession){if(t)t.textContent=freeSourceCode?'مصدر مجاني: '+freeSourceCode:'معاينة — يلزم حساب VIP';if(p)p.textContent=freeSourceCode?'المصدر المجاني: '+freeSourceCode:'لم يتم تسجيل الدخول';return;}
  const sub=currentSession.subscriptions?.find(s=>s.status==='active'&&new Date(s.ends_at)>new Date());
  const status=sub?'VIP فعّال حتى '+new Date(sub.ends_at).toLocaleDateString('ar-IQ'):'لا يوجد اشتراك نشط';
- if(t)t.textContent=status;if(p)p.textContent=(currentSession.email||'')+' — '+status;
+ if(t)t.textContent=status;if(p)p.textContent=(currentSession.username||'المشاهد')+' — '+status;
 }
 async function initTv(){
  $('#watch-close').onclick=hideWatch;
@@ -196,7 +196,7 @@ async function initTv(){
 
  $$('[data-tv-tab]').forEach(el=>el.addEventListener('click',()=>openTv(el.dataset.tvTab)));
  $('#tv-search').addEventListener('input',()=>['live','movie','series','anime'].forEach(k=>renderCatalog(k)));
- $('#tv-user').onclick=()=>{if(!token)$('#tv-login').classList.remove('hidden');else notice(currentSession?.email||'حساب أكّد');};
+ $('#tv-user').onclick=()=>{if(!token)$('#tv-login').classList.remove('hidden');else notice(currentSession?.username||'حساب أكّد');};
  $('#tv-guest').onclick=()=>{$('#tv-login').classList.add('hidden');notice('هذه معاينة، التشغيل يحتاج حساباً واشتراكاً');};
  $('#tv-login-form').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{
     if($('#tv-use-free').checked){
