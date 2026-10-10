@@ -30,7 +30,7 @@ test('invalid durations and non-administrator grants are blocked before database
  const base={p:'/api/admin/viewers/'+viewer+'/activate',req:{method:'POST'},res:{},json:respond,
   readBody:async()=>({days:0}),auth:admin,apiRequest:async()=>{writes++;return []}};
  await assert.rejects(()=>viewerRoutes(base),/1095/);
- await assert.rejects(()=>viewerRoutes({...base,readBody:async()=>({days:30}),auth:async()=>({role:'admin',token:'admin'})}),/المدير الأساسي/);
+ await assert.rejects(()=>viewerRoutes({...base,readBody:async()=>({days:30}),auth:async()=>({role:'admin',token:'admin'})}),/مدير أساسي/);
  assert.equal(writes,0);
 });
 test('subscription pause calls protected update and does not delete the viewer',async()=>{
