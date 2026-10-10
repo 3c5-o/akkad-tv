@@ -126,6 +126,79 @@ export async function collectSource(source,creds,kind,limit,allowlist,options={}
  }
  throw error('المصدر لا يدعم المزامنة التلقائية بعد');
 }
+
+export function prepareAccountDraft(input,allowedHosts,httpEnabled=false){
+ if(!input||typeof input!=='object')throw error('بيانات المصدر مطلوبة');
+ const kind=String(input.kind||'');
+ if(!['xtream','m3u'].includes(kind))throw error('الفحص الحقيقي متاح حالياً لـ Xtream وM3U فقط');
+ const name=String(input.name||'').trim().slice(0,100);
+ if(!name)throw error('اسم المصدر مطلوب');
+ if(input.license_confirmed!==true)throw error('تأكيد ترخيص المصدر مطلوب');
+ const allowHttp=input.allow_insecure_http===true&&httpEnabled===true;
+ const url=validateEndpoint(input.endpoint,allowedHosts,{allowHttp});
+ if(url.protocol==='http:'&&!allowHttp)throw error('اتصال HTTP يحتاج موافقة خاصة وتهيئة الخادم');
+ let credentials;
+ if(kind==='xtream'){
+   if(typeof input.username!=='string'||typeof input.password!=='string'||!input.username.trim()||!input.password
+      ||input.username.length>200||input.password.length>250)throw error('أدخل اسم المستخدم وكلمة مرور Xtream كاملة');
+   credentials={username:input.username.trim(),password:input.password};
+ }else{
+   if(typeof input.playlist_url!=='string'||input.playlist_url.length>4096||!input.playlist_url)throw error('أدخل رابط M3U الكامل');
+   validateEndpoint(input.playlist_url,allowedHosts,{query:true,host:url.hostname,allowHttp});
+   credentials={playlist_url:input.playlist_url};
+ }
+ return {source:{name,kind,endpoint:url.toString().replace(/\/$/,''),allow_insecure_http:allowHttp,license_confirmed:true},credentials};
+}
+export async function inspectAccount(source,credentials,allowedHosts,options={}){
+ const overview=await verifySource(source,credentials,allowedHosts,options);
+ const counts={live:null,movie:null,series:null};
+ const warnings=[];
+ if(source.kind==='m3u'){
+   Object.assign(counts,overview.counts||{});
+ }else{
+   const countActions=[['live','get_live_streams'],['movie','get_vod_streams'],['series','get_series']];
+   const checked=await Promise.allSettled(countActions.map(async ([,action])=>{
+     const data=await xtream(source.endpoint,credentials,action,allowedHosts,options);
+     if(!Array.isArray(data))throw error('المزود لم يرجع قائمة');
+     return data.length;
+   }));
+   checked.forEach((r,i)=>{
+     const kind=countActions[i][0];
+     if(r.status==='fulfilled')counts[kind]=r.value;
+     else warnings.push('تعذّر إحصاء '+({live:'القنوات',movie:'الأفلام',series:'المسلسلات'}[kind])+' من المزود؛ لا يؤثر ذلك على نجاح تسجيل الدخول');
+   });
+ }
+ return {status:overview.status,expires_at:overview.expires_at||null,max_connections:overview.max_connections??null,
+   active_connections:overview.active_connections??null,counts,warnings,checked_at:new Date().toISOString(),
+   account_verified:true};
+}
+export async function handlePreflight({req,res,p,admin,apiRequest,readBody,json}){
+ if(!['/api/admin/sources/preflight','/api/admin/sources/verified-create'].includes(p))return false;
+ const a=await admin(req);
+ if(req.method!=='POST')throw error('طريقة الطلب غير مدعومة',405);
+ const input=await readBody(req),hosts=process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'';
+ const {source,credentials}=prepareAccountDraft(input,hosts,process.env.AKKAD_ALLOW_HTTP_SOURCES==='true');
+ const overview=await inspectAccount(source,credentials,hosts,{allowHttp:source.allow_insecure_http});
+ if(p.endsWith('/preflight'))return json(res,200,{ok:true,overview,saved:false});
+ const now=new Date().toISOString(),encrypted=encrypt(credentials,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
+ const added=await apiRequest('/rest/v1/akkad_sources',{method:'POST',token:a.token,body:{
+   ...source,enabled:true,last_checked_at:now,last_check_status:'ok',last_error:null,
+   provider_expires_at:overview.expires_at,provider_max_connections:overview.max_connections,
+   provider_active_connections:overview.active_connections
+ },extraHeaders:{Prefer:'return=representation'}});
+ const record=added?.[0];if(!record?.id)throw error('تعذر إنشاء سجل المصدر',502);
+ try{
+   await apiRequest('/rest/v1/akkad_source_credentials',{method:'POST',token:a.token,
+     body:{source_id:record.id,...encrypted},extraHeaders:{Prefer:'return=minimal'}});
+ }catch(e){
+   // Do not leave an enabled source after a credential-storage failure.
+   await apiRequest('/rest/v1/akkad_sources?id=eq.'+record.id,{method:'PATCH',token:a.token,
+     body:{enabled:false,last_check_status:'error',last_error:'تعذر حفظ بيانات الاعتماد'},extraHeaders:{Prefer:'return=minimal'}}).catch(()=>{});
+   throw error('نجح الفحص لكن تعذر حفظ بيانات الدخول؛ المصدر غير مفعّل. أعد المحاولة بعد المراجعة',502);
+ }
+ return json(res,201,{ok:true,saved:true,item:{id:record.id,name:record.name,kind:record.kind},overview});
+}
+
 export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,json}){
  const match=/^\/api\/admin\/sources\/([0-9a-f-]{36})\/(credentials|check|sync|jobs)$/.exec(p);
  if(!match)return false;
@@ -145,33 +218,38 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  const allowHttp=source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true';
  const transport={allowHttp};
  if(new URL(source.endpoint).protocol==='http:'&&!allowHttp)throw error('هذا المصدر يستخدم HTTP: يجب تأكيد السماح لكل مصدر وتفعيل الخيار الآمن في إعدادات Railway',400);
- if(action==='credentials'){
-  validateEndpoint(source.endpoint,allowlist,{allowHttp});
-  const b=await readBody(req);let data;
-  if(source.kind==='xtream'){
-   if(typeof b.username!=='string'||typeof b.password!=='string'||!b.username.trim()||!b.password||b.username.length>200||b.password.length>250)throw error('الاسم أو كلمة المرور غير صحيحة');
-   data={username:b.username.trim(),password:b.password};
-  }else if(source.kind==='m3u'){
-   if(typeof b.playlist_url!=='string'||b.playlist_url.length>4096)throw error('رابط M3U غير صحيح');
-   validateEndpoint(b.playlist_url,allowlist,{query:true,host:new URL(source.endpoint).hostname,allowHttp});
-   data={playlist_url:b.playlist_url};
-  }else throw error('الحفظ التلقائي لهذا النوع لم يُدعَم بعد');
-  const enc=encrypt(data,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
-  await query('source_credentials',{method:'POST',where:'?on_conflict=source_id',body:{source_id:id,...enc},prefer:'resolution=merge-duplicates,return=minimal'});
-  return json(res,200,{ok:true,saved:true});
+ if(action==='credentials'||action==='check'){
+  // A check with supplied credentials verifies first, then saves only after success.
+  // A check without credentials reuses a previously verified encrypted record.
+  const b=await readBody(req);
+  const supplied=source.kind==='xtream'?Boolean(b.username||b.password):Boolean(b.playlist_url);
+  const existing=await query('source_credentials',{where:'?select=*&source_id=eq.'+id});
+  let credentials;
+  if(supplied){
+    credentials=prepareAccountDraft({...source,...b,license_confirmed:true},allowlist,process.env.AKKAD_ALLOW_HTTP_SOURCES==='true').credentials;
+  }else{
+    credentials=decrypt(existing?.[0],process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
+  }
+  try{
+    const overview=await inspectAccount(source,credentials,allowlist,transport);
+    if(supplied){
+      const encrypted=encrypt(credentials,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
+      await query('source_credentials',{method:'POST',where:'?on_conflict=source_id',body:{source_id:id,...encrypted},prefer:'resolution=merge-duplicates,return=minimal'});
+    }
+    await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{
+      last_checked_at:overview.checked_at,last_check_status:'ok',last_error:null,enabled:true,
+      provider_expires_at:overview.expires_at,provider_max_connections:overview.max_connections,
+      provider_active_connections:overview.active_connections
+    }});
+    return json(res,200,{ok:true,saved:Boolean(supplied),overview});
+  }catch(e){
+    // A failed check must not activate or replace existing good credentials.
+    await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'error',last_error:String(e.message).slice(0,150),enabled:false}}).catch(()=>{});
+    throw e;
+  }
  }
  const credentialsRecord=await query('source_credentials',{where:'?select=*&source_id=eq.'+id});
  const credentials=decrypt(credentialsRecord?.[0],process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
- if(action==='check'){
-  try{
-   const overview=await verifySource(source,credentials,allowlist,transport);
-   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'ok',last_error:null,enabled:true,provider_expires_at:overview.expires_at||null,provider_max_connections:overview.max_connections??null,provider_active_connections:overview.active_connections??null}});
-   return json(res,200,{ok:true,overview});
-  }catch(e){
-   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'error',last_error:String(e.message).slice(0,170),enabled:false}}).catch(()=>{});
-   throw e;
-  }
- }
  if(action!=='sync')throw error('العملية غير معروفة',404);
  const b=await readBody(req);const kind=b.kind,limit=Number(b.limit);
  if(!types.includes(kind)||![10,50,100].includes(limit))throw error('حدد قسماً وعدداً 10 أو 50 أو 100');
