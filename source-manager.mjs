@@ -109,7 +109,7 @@ export async function verifySource(source,credentials,allowlist,options={}){
 }
 export async function collectSource(source,creds,kind,limit,allowlist,options={}){
  const offset=Number.isSafeInteger(options.offset)&&options.offset>=0?options.offset:0;
- validateEndpoint(source.endpoint,allowlist);
+ validateEndpoint(source.endpoint,allowlist,{allowHttp:options.allowHttp===true});
  if(source.kind==='xtream'){
   const [catAction,listAction]=actions[kind];
   const [cats,rows]=await Promise.all([xtream(source.endpoint,creds,catAction,allowlist,options),xtream(source.endpoint,creds,listAction,allowlist,options)]);
