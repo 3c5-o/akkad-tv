@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 const raise=(message,status=400)=>{const e=new Error(message);e.status=status;throw e};
 const usernamePattern=/^[a-z0-9_]{3,32}$/;
-const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function viewerEmail(username,secret){
  if(!usernamePattern.test(username))raise('اسم المستخدم يجب أن يكون 3–32 حرفاً إنجليزياً أو رقماً',400);
  if(!/^[a-f0-9]{64}$/i.test(secret||''))raise('AKKAD_USERNAME_SECRET غير مهيأ على الخادم',503);
