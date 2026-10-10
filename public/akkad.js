@@ -150,7 +150,7 @@ async function playItem(id){
       const h3=document.createElement('h3');h3.textContent='الموسم '+season.season;root.append(h3);
       for(const episode of season.episodes||[]){
         const b=document.createElement('button');b.className='watch-episode';b.textContent=episode.title||('الحلقة '+episode.episode_num);
-        b.onclick=()=>{setWatchStatus('جارٍ تشغيل '+b.textContent+'...');startVideo(episode.url,episode.url.includes('m3u8')?'hls':'mp4')};
+        b.onclick=()=>{setWatchStatus('جارٍ تشغيل '+b.textContent+'...');startVideo(episode.url,episode.format==='m3u8'?'hls':(episode.format||'mp4'))};
         root.append(b);episodes++;
       }
     }
