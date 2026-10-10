@@ -311,6 +311,45 @@ function setupSourceTools(){
  $('#source-sync').onclick=()=>run(null,'sync',{kind:$('#source-sync-kind').value,limit:Number($('#source-sync-limit').value),reset:$('#source-sync-reset').checked});
 }
 
+
+function setupSourcePreflight(){
+ const form=$('form[data-create="sources"]'),button=$('#source-preflight'),result=$('#source-preflight-result');
+ if(!form||!button||!result)return;
+ const kindSelector=$('[name=kind]',form);
+ function renderKind(){
+  const xtream=kindSelector.value==='xtream',m3u=kindSelector.value==='m3u';
+  $('[data-new-xtream]',form).forEach(el=>el.classList.toggle('hidden',!xtream));
+  $('[data-new-m3u]',form).forEach(el=>el.classList.toggle('hidden',!m3u));
+  button.disabled=!(xtream||m3u);
+  const submit=$('button[type=submit]',form);
+  if(submit)submit.textContent=(xtream||m3u)?'فحص وإضافة المصدر عند النجاح':'إضافة مصدر يدوي معطّل';
+ }
+ kindSelector.onchange=renderKind;renderKind();
+ button.onclick=async()=>{
+  if(!form.reportValidity())return;
+  button.disabled=true;result.textContent='جارٍ فحص الاتصال والحساب والبحث عن القنوات والأفلام والمسلسلات...';
+  try{
+   const payload=getTyped(form);
+   const response=await api('/api/admin/sources/preflight',{method:'POST',body:JSON.stringify(payload)});
+   result.textContent=formatAccountReport(response.overview)+'\nلم تُحفظ بيانات الحساب بعد. اضغط «فحص وإضافة المصدر عند النجاح» لحفظه.';
+   notice('نجح فحص الحساب الحقيقي');
+  }catch(err){
+   result.textContent='فشل الفحص: '+err.message+'\nلم يُضَف الحساب ولم تُحفظ كلمة المرور.';
+   notice(err.message);
+  }finally{button.disabled=false;}
+ };
+}
+function formatAccountReport(overview){
+ const v=overview||{},n=v.counts||{};
+ const check=(number)=>number==null?'غير متاح من المزود':String(number);
+ return 'الحالة: '+(v.status||'غير معروفة')+
+  '\nانتهاء الحساب: '+(v.expires_at?new Date(v.expires_at).toLocaleString('ar-IQ'):'لم يحدد المزود تاريخاً')+
+  '\nعدد الاتصالات المسموح: '+check(v.max_connections)+
+  '\nالاتصالات الحالية: '+check(v.active_connections)+
+  '\nالقنوات: '+check(n.live)+' • الأفلام: '+check(n.movie)+' • المسلسلات: '+check(n.series)+
+  (v.warnings?.length?'\nملاحظات: '+v.warnings.join('؛ '):'')+'\n';
+}
+
 function setupStreamForm(){
  const section=$('[data-admin-section="catalog"]');if(!section)return;
  const holder=document.createElement('div');holder.className='panel admin-card';holder.innerHTML=
@@ -334,15 +373,28 @@ async function initAdmin(){
  }catch(err){notice(err.message);}finally{btn.disabled=false;}};
  $$('form[data-create]').forEach(form=>form.onsubmit=async e=>{
   e.preventDefault();const kind=form.dataset.create;const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
-  try{const body=getTyped(form);const result=await api('/api/admin/'+kind,{method:'POST',body:JSON.stringify(body)});
-    notice('تم حفظ البيانات');if(kind==='activations'&&result.activation_code){
+  try{
+    const body=getTyped(form);
+    const verified=kind==='sources'&&['xtream','m3u'].includes(body.kind);
+    const route=verified?'/api/admin/sources/verified-create':'/api/admin/'+kind;
+    if(verified)$('#source-preflight-result').textContent='جارٍ اختبار الحساب ثم حفظه وتفعيله فقط بعد نجاح المصادقة...';
+    const result=await api(route,{method:'POST',body:JSON.stringify(body)});
+    notice(verified?'نجح الفحص وتم إنشاء مصدر نشط':'تم حفظ البيانات');
+    if(verified)$('#source-preflight-result').textContent=formatAccountReport(result.overview)+'\nالمصدر مضاف ومفعّل. الآن اختره من القائمة لتبدأ المزامنة.';
+    if(kind==='activations'&&result.activation_code){
       const el=$('#new-code-result');el.textContent='كود التفعيل الجديد — انسخه الآن: '+result.activation_code;
       const copy=document.createElement('button');copy.className='btn small';copy.textContent='نسخ الكود';copy.type='button';copy.onclick=()=>navigator.clipboard.writeText(result.activation_code).then(()=>notice('تم نسخ الكود')).catch(()=>notice('انسخ الكود يدوياً'));el.append(' ',copy);
     }
     form.reset();await loadAdminSection(kind);
-  }catch(err){notice(err.message);}finally{if(btn)btn.disabled=false;}
+    if(kind==='sources'){
+      const chosen=result.item?.id;
+      if(chosen&&$('#source-selected')){$('#source-selected').value=chosen;$('#source-selected').dispatchEvent(new Event('change'));}
+      $('form[data-create="sources"] [name=kind]').dispatchEvent(new Event('change'));
+    }
+  }catch(err){if(kind==='sources')$('#source-preflight-result').textContent='فشل الفحص أو الحفظ: '+err.message+'\nإذا كان Xtream/M3U فلن يُضاف حساب جديد عند فشل الفحص.';notice(err.message);}finally{if(btn)btn.disabled=false;}
  });
  setupSourceTools();
+ setupSourcePreflight();
  setupStreamForm();
  if(token){try{currentSession=await api('/api/session');}catch{token='';sessionStorage.removeItem(sessionKey);}}
  if(!currentSession||currentSession.role==='user'){$('#admin-login').classList.remove('hidden');return;}
