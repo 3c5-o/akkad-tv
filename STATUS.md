@@ -13,8 +13,11 @@
 - [x] أصول التصميم SVG وقائمة مطابقة الهوية.
 
 ## المطلوب قبل التشغيل الحي
-- [ ] Railway: الخطة الحالية لحساب 3c5-o وصلت حد إنشاء الموارد؛ لا مشروع AKKAD في الحساب. اختَر حساباً متاحاً أو وفّر مكاناً/حداً إضافياً، ولا تحذف مشاريع أخرى تلقائياً.
-- [ ] ضبط Railway Variables لمفتاح Supabase publishable ورابط المشروع، واختبار API فعلياً.
+- [x] Railway: إنشاء مشروع AKKAD TV في الحساب الرابع الفارغ (My Projects) بمعرّف bff52fe3-7735-4263-8273-8b2a9a24a7c9، دون لمس المشاريع الأخرى.
+- [x] ربط خدمة akkad-core بفرع main على GitHub وإنشاء نطاق https://akkad-core-production.up.railway.app.
+- [x] تعيين SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY وNODE_ENV عبر Railway Variables.
+- [x] Railway deployment SUCCESS وحالة Online (1/1 نسخة تعمل، بدون انهيارات).
+- [ ] اختبار HTTP مباشر من خارج Railway لكل المسارات، وخاصة /health و/tv و/admin وتسجيل الدخول. تعذّر الوصول عبر شبكة أدوات الفحص، لذا النجاح المؤكد حتى الآن نجاح بناء وتشغيل Railway.
 - [ ] إعداد Cloudflare Worker ليوجّه الطلبات إلى الخادم بعد نجاحه (Worker الحالي ليس موصولاً بالإصدار الجديد).
 - [ ] فحص OneSignal FCM بإرسال إشعار اختباري إلى جهاز.
 - [ ] إعداد TMDb API على الخادم واختبار جلب فيلم ومسلسل.
