@@ -19,7 +19,8 @@ export function validateEndpoint(value,allowlist,{query=false,host=null}={}){
 }
 async function readRemote(url,allowed,options={}){
  const u=validateEndpoint(url,allowed,{query:true,host:options.host||null});
- const ips=await (options.lookup||lookup)(u.hostname,{all:true});
+ let ips;
+ try{ips=await (options.lookup||lookup)(u.hostname,{all:true});}catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
  if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
  let r;try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw error('تعذر الاتصال بالمصدر الآمن',502);}
  if(!r.ok)throw error('المصدر أعاد HTTP '+r.status,502);
