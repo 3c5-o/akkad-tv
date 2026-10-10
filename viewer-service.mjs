@@ -29,7 +29,14 @@ export async function viewerRoutes({req,res,p,json,auth,readBody,apiRequest}){
  }
  const a=await auth(req,{admin:true});
  if(p==='/api/admin/viewers'&&req.method==='GET'){
-  return json(res,200,await apiRequest('/rest/v1/akkad_viewer_accounts?select=*&order=created_at.desc&limit=200',{token:a.token}));
+  const parsed=new URL(req.url||'/api/admin/viewers','http://localhost');
+  const offset=Number(parsed.searchParams.get('offset')||0);
+  const limit=Number(parsed.searchParams.get('limit')||50);
+  const search=String(parsed.searchParams.get('search')||'').trim();
+  if(!Number.isInteger(offset)||offset<0||offset>100000||!Number.isInteger(limit)||limit<1||limit>100||search.length>64)raise('بحث المستخدمين غير صالح');
+  const rows=await apiRequest('/rest/v1/rpc/akkad_admin_list_viewers',{method:'POST',token:a.token,
+    body:{p_search:search,p_offset:offset,p_limit:limit}});
+  return json(res,200,{items:rows||[],total:Number(rows?.[0]?.total_count||0),offset,limit});
  }
  if(a.role!=='super_admin')raise('مدير أساسي فقط',403);
  if(p==='/api/admin/viewers'&&req.method==='POST'){
@@ -45,6 +52,32 @@ export async function viewerRoutes({req,res,p,json,auth,readBody,apiRequest}){
   }catch(e){await adminApi('/auth/v1/admin/users/'+created.id,{method:'DELETE'}).catch(()=>{});throw e}
   return json(res,201,{user_id:created.id,username,ok:true});
  }
+
+ const active=/^\/api\/admin\/viewers\/([0-9a-f-]{36})\/activate$/.exec(p);
+ if(active){
+  if(a.role!=='super_admin')raise('تفعيل المشاهدين للمدير الأساسي فقط',403);
+  if(req.method!=='POST')raise('طريقة غير مسموحة',405);
+  const id=active[1];if(!uuidPattern.test(id))raise('معرف مستخدم غير صالح');
+  const b=await readBody(req),days=Number(b.days);
+  if(!Number.isInteger(days)||days<1||days>1095)raise('المدة يجب أن تكون من يوم إلى 1095 يوماً');
+  const plan=b.plan_id==null||b.plan_id===''?null:b.plan_id;
+  if(plan!==null&&!uuidPattern.test(plan))raise('معرّف الباقة غير صالح');
+  const rows=await apiRequest('/rest/v1/rpc/akkad_admin_activate_viewer',{method:'POST',token:a.token,
+    body:{p_user:id,p_days:days,p_plan:plan}});
+  return json(res,200,{ok:true,subscription:rows?.[0]||rows});
+ }
+ const stop=/^\/api\/admin\/viewers\/([0-9a-f-]{36})\/subscription$/.exec(p);
+ if(stop){
+  if(a.role!=='super_admin')raise('تعديل الاشتراك للمدير الأساسي فقط',403);
+  if(req.method!=='PATCH')raise('طريقة غير مسموحة',405);
+  const id=stop[1];if(!uuidPattern.test(id))raise('معرف مستخدم غير صالح');
+  const {status}=await readBody(req);
+  if(status!=='paused')raise('يمكن إيقاف الاشتراك فقط من هنا');
+  const rows=await apiRequest('/rest/v1/akkad_subscriptions?user_id=eq.'+id+'&status=eq.active',{method:'PATCH',token:a.token,body:{status:'paused'},
+    extraHeaders:{Prefer:'return=representation'}});
+  return json(res,200,{ok:true,changed:rows?.length||0});
+ }
+
  const match=/^\/api\/admin\/viewers\/([a-f0-9-]{36})(\/password)?$/.exec(p);
  if(!match||!uuidPattern.test(match[1]))raise('مسار غير موجود',404);
  const id=match[1];
@@ -55,7 +88,7 @@ export async function viewerRoutes({req,res,p,json,auth,readBody,apiRequest}){
   await adminApi('/auth/v1/admin/users/'+id,{method:'PUT',body:{password}});
  }else if(req.method==='PATCH'){
   const {active}=await readBody(req);if(typeof active!=='boolean')raise('الحالة غير صحيحة');
-  await apiRequest('/rest/v1/akkad_viewer_accounts?user_id=eq.'+id,{method:'PATCH',token:a.token,body:{active}});
+  await apiRequest('/rest/v1/rpc/akkad_admin_suspend_viewer',{method:'POST',token:a.token,body:{p_user:id,p_suspend:!active}});
  }else if(req.method==='DELETE')await adminApi('/auth/v1/admin/users/'+id,{method:'DELETE'});
  else raise('طريقة غير مدعومة',405);
  return json(res,200,{ok:true});
