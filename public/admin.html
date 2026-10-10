@@ -31,7 +31,7 @@
       <div class="form-actions"><button class="btn primary">حفظ المصدر معطّلاً</button></div></form></div>
     <div class="panel admin-card" id="source-tools">
   <h3>فحص حسابات IPTV والمزامنة</h3>
-  <p class="note">احفظ المصدر أعلاه أولاً. بعدها أدخل بيانات حسابه المشفّرة، وافحص الاتصال، ثم اختر القسم والعدد للمزامنة. المصدر يُضاف للكتالوج كمسودات غير منشورة.</p>
+  <p class="note">احفظ المصدر أعلاه أولاً. بعدها أدخل بيانات حسابه المشفّرة، وافحص الاتصال، ثم اختر القسم والعدد للمزامنة. يواصل النظام تلقائياً من الدفعة السابقة، والمحتوى يُضاف كمسودات غير منشورة.</p>
   <div class="form-grid">
     <div class="field" style="grid-column:1/-1"><label for="source-selected">المصدر المحدد</label><select class="select" id="source-selected"><option value="">اختر المصدر</option></select></div>
     <div class="field" data-xtream-field><label for="source-username">اسم مستخدم Xtream</label><input class="input" id="source-username" autocomplete="off" placeholder="اسم المستخدم"/></div>
@@ -44,7 +44,7 @@
     </div>
     <div class="field"><label for="source-sync-kind">القسم</label><select class="select" id="source-sync-kind"><option value="live">القنوات المباشرة</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select></div>
     <div class="field"><label for="source-sync-limit">عدد العناصر بكل دفعة</label><select class="select" id="source-sync-limit"><option value="10">10</option><option value="50">50</option><option value="100">100</option></select></div>
-    <div class="form-actions"><button id="source-sync" class="btn primary" type="button">بدء مزامنة القسم</button></div>
+    <label class="field" style="display:flex;align-items:center;gap:10px;flex-direction:row;grid-column:1/-1"><input type="checkbox" id="source-sync-reset"/> إعادة من بداية القائمة (للتحقق من محتوى جديد)</label><div class="form-actions"><button id="source-sync" class="btn primary" type="button">بدء مزامنة القسم</button></div>
   </div>
   <div id="source-action-result" class="note" role="status" aria-live="polite" style="margin-top:12px;white-space:pre-wrap">لم يتم تنفيذ فحص بعد.</div>
 </div>
