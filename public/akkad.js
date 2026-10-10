@@ -121,7 +121,7 @@ async function startVideo(url,format){
  element.append(video);
  video.addEventListener('error',()=>setWatchStatus('فشل تشغيل الفيديو. قد لا يدعم المتصفح هذه الصيغة أو يكون رابط المزود متوقفاً.'));
  if(format==='hls'&&window.Hls?.isSupported()){
-  currentHls=new window.Hls({enableWorker:true,maxBufferLength:30,liveSyncDurationCount:3});
+  currentHls=new window.Hls({enableWorker:false,maxBufferLength:30,liveSyncDurationCount:3});
   currentHls.loadSource(url);currentHls.attachMedia(video);
   currentHls.on(window.Hls.Events.ERROR,(_event,detail)=>{
    if(detail.fatal)setWatchStatus('تعذّر تشغيل البث: '+(detail.type||'خطأ بالمصدر'));
