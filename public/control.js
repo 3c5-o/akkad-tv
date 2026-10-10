@@ -1,5 +1,5 @@
 (()=>{'use strict';
-const $=s=>document.querySelector(s),$=(s,root=document)=>[...root.querySelectorAll(s)];
+const $=s=>document.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
 const key='akkad_session_v1',refreshKey='akkad_refresh_v1';
 let token=sessionStorage.getItem(key)||'',refresh=sessionStorage.getItem(refreshKey)||'',pending=null;
 let session=null,resources={sources:[],catalog:[],plans:[],subscriptions:[],activations:[]},currentSource=null,sourceFilter='all';
