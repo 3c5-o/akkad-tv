@@ -8,7 +8,8 @@ let token=sessionStorage.getItem(sessionKey)||'';
 let refreshToken=sessionStorage.getItem(refreshKey)||'';
 let refreshRequest=null;
 let currentSession=null;
-let freeSourceCode='';
+let freeSourceCode=sessionStorage.getItem('akkad_free_source')||'';
+let currentHls=null;
 let catalog=[];
 const records={};
 function notice(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.classList.remove('show'),4700);}
@@ -63,7 +64,7 @@ async function login(form){
   currentSession=await api('/api/session');
   return data;
 }
-function logout(){token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');notice('تم تسجيل الخروج');}
+function logout(){hideWatch();freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');notice('تم تسجيل الخروج');}
 function openTv(section){
   $$('.tv-section').forEach(el=>el.classList.toggle('active',el.dataset.tvSection===section));
   $$('[data-tv-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tvTab===section));
@@ -100,26 +101,68 @@ function renderCatalog(kind,category='الكل'){
  $$('#cat-'+kind+' [data-category]').forEach(el=>el.onclick=()=>renderCatalog(kind,el.dataset.category));
  $$('#grid-'+kind+' [data-play]').forEach(el=>el.onclick=()=>playItem(el.dataset.play));
 }
-async function playItem(id){
- try{
-  if(!token){notice(freeSourceCode?'المصدر المجاني مخصص لعرض المحتوى؛ تشغيله يحتاج مشغّل مصادر مرخّصة مجهّز':'سجّل دخولك لبدء المشاهدة');if(!freeSourceCode)$('#tv-login').classList.remove('hidden');return;}
-  if(!activeSub()&&currentSession?.role==='user'){notice('يجب تفعيل اشتراك VIP أولاً');return;}
-  const links=await api('/api/play/'+encodeURIComponent(id));
-  if(!Array.isArray(links)||links.length===0){notice('لا تتوفر مصادر تشغيل لهذا المحتوى حالياً');return;}
-  const item=catalog.find(x=>x.id===id);
-  openTv('live');
-  $('#live-title').textContent=item?.title||'مشغل أكّد';
-  $('#live-status').textContent='المصدر: '+links[0].label;
-  const player=$('#live-player');player.replaceChildren();
-  const video=document.createElement('video');video.controls=true;video.autoplay=true;video.playsInline=true;video.preload='metadata';
-  if(['hls','dash','mp4','ts','mkv','other'].includes(links[0].media_type)){
-    video.src=links[0].media_url;
-  }
-  player.append(video);
-  video.play().catch(()=>notice('اضغط تشغيل إذا منع المتصفح التشغيل التلقائي'));
-  video.addEventListener('error',()=>notice('تعذّر تشغيل الصيغة في هذا المتصفح. جرّب مشغلاً متوافقاً أو مصدرًا آخر.'));
- }catch(err){notice(err.message);}
+function hideWatch(){
+ if(currentHls){currentHls.destroy();currentHls=null}
+ const el=$('#watch-video');if(el){const video=el.querySelector('video');video?.pause();el.replaceChildren()}
+ $('#tv-watch-modal')?.classList.add('hidden');
 }
+function displayWatch(title,message=''){
+ $('#tv-watch-modal')?.classList.remove('hidden');
+ $('#watch-title').textContent=title||'مشغل أكّد';
+ $('#watch-message').textContent=message;
+ const episodes=$('#watch-episodes');episodes.replaceChildren();episodes.classList.add('hidden');
+}
+function setWatchStatus(status){$('#watch-message').textContent=status;}
+async function startVideo(url,format){
+ if(currentHls){currentHls.destroy();currentHls=null}
+ const element=$('#watch-video');element.replaceChildren();
+ const video=document.createElement('video');video.controls=true;video.playsInline=true;video.autoplay=true;
+ video.preload='metadata';video.setAttribute('aria-label','مشغل أكّد');
+ element.append(video);
+ video.addEventListener('error',()=>setWatchStatus('فشل تشغيل الفيديو. قد لا يدعم المتصفح هذه الصيغة أو يكون رابط المزود متوقفاً.'));
+ if(format==='hls'&&window.Hls?.isSupported()){
+  currentHls=new window.Hls({enableWorker:true,maxBufferLength:30,liveSyncDurationCount:3});
+  currentHls.loadSource(url);currentHls.attachMedia(video);
+  currentHls.on(window.Hls.Events.ERROR,(_event,detail)=>{
+   if(detail.fatal)setWatchStatus('تعذّر تشغيل البث: '+(detail.type||'خطأ بالمصدر'));
+  });
+ }else{
+  video.src=url;
+  if(format==='hls'&&!video.canPlayType('application/vnd.apple.mpegurl')){
+   setWatchStatus('هذه الصيغة تحتاج HLS.js أو متصفحاً يدعم HLS');
+  }
+ }
+ video.play().catch(()=>setWatchStatus('اضغط زر تشغيل الفيديو إذا منع المتصفح التشغيل التلقائي.'));
+}
+async function playItem(id){
+ const item=catalog.find(x=>x.id===id);
+ if(!item)return notice('المحتوى غير موجود في القائمة');
+ if(!token&&!freeSourceCode){$('#tv-login')?.classList.remove('hidden');return notice('سجّل الدخول أو أدخل كود المصدر');}
+ displayWatch(item.title,'جارٍ تحميل بيانات التشغيل من المصدر...');
+ try{
+  const route=freeSourceCode?'/api/free/'+encodeURIComponent(freeSourceCode):'/api';
+  if(item.kind==='series'){
+    const result=await api(route+'/episodes/'+encodeURIComponent(id));
+    const root=$('#watch-episodes');root.classList.remove('hidden');
+    const seasons=result.seasons||[];
+    let episodes=0;
+    for(const season of seasons){
+      const h3=document.createElement('h3');h3.textContent='الموسم '+season.season;root.append(h3);
+      for(const episode of season.episodes||[]){
+        const b=document.createElement('button');b.className='watch-episode';b.textContent=episode.title||('الحلقة '+episode.episode_num);
+        b.onclick=()=>{setWatchStatus('جارٍ تشغيل '+b.textContent+'...');startVideo(episode.url,episode.url.includes('m3u8')?'hls':'mp4')};
+        root.append(b);episodes++;
+      }
+    }
+    setWatchStatus(episodes?'اختر حلقة لبدء المشاهدة. عدد الحلقات: '+episodes:'لا توجد حلقات متاحة من حساب Xtream');
+  }else{
+    const result=await api(route+'/watch/'+encodeURIComponent(id));
+    setWatchStatus('المصدر: '+result.label+' • '+(result.format==='hls'?'HLS':result.format?.toUpperCase()||'تلقائي'));
+    await startVideo(result.url,result.format);
+  }
+ }catch(e){setWatchStatus('تعذر التشغيل: '+e.message);notice(e.message)}
+}
+
 async function loadCatalog(){
  if(!token&&!freeSourceCode){catalog=[];$('#tv-featured').innerHTML=messageBox('سجّل الدخول بحساب أنشأته الإدارة، أو أدخل كود مصدر مجاني لعرض المحتوى المتاح.');return;}
  try{
@@ -138,6 +181,12 @@ function refreshUser(){
  if(t)t.textContent=status;if(p)p.textContent=(currentSession.email||'')+' — '+status;
 }
 async function initTv(){
+ $('#watch-close').onclick=hideWatch;
+ $('#watch-fullscreen').onclick=()=>{
+  const video=$('#watch-video video');if(video?.requestFullscreen)video.requestFullscreen();else $('#tv-watch-modal').requestFullscreen?.();
+ };
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')hideWatch()});
+
  $('#tv-use-free').onchange=()=>{
   const free=$('#tv-use-free').checked;
   $('#tv-free-entry').classList.toggle('hidden',!free);
@@ -154,12 +203,12 @@ async function initTv(){
       const code=String(new FormData(e.target).get('source_code')||'').trim().toUpperCase();
       if(!/^[A-Z0-9]{2,12}$/.test(code))throw new Error('أدخل كود المصدر مثل A1');
       const data=await api('/api/free/'+code+'/catalog');
-      freeSourceCode=code;catalog=Array.isArray(data.items)?data.items:[];
+      freeSourceCode=code;sessionStorage.setItem('akkad_free_source',code);catalog=Array.isArray(data.items)?data.items:[];
       token='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);
       $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
       notice('تم فتح المصدر المجاني: '+data.source.name);
     }else{
-      freeSourceCode='';await login(e.target);
+      freeSourceCode='';sessionStorage.removeItem('akkad_free_source');await login(e.target);
       $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
     }
   }catch(err){notice(err.message);}finally{btn.disabled=false;}};
