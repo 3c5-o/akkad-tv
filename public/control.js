@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
 const key='akkad_session_v1',refreshKey='akkad_refresh_v1';
 let token=sessionStorage.getItem(key)||'',refresh=sessionStorage.getItem(refreshKey)||'',pending=null;
-let session=null,resources={sources:[],catalog:[],plans:[],subscriptions:[],activations:[]},currentSource=null,sourceFilter='all';
+let session=null,resources={sources:[],catalog:[],plans:[],subscriptions:[],activations:[]},currentSource=null,sourceFilter='all',viewerState={items:[],offset:0,total:0,search:'',selected:null};
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const notice=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>e.classList.remove('show'),4300)};
 function fail(e,target){if(target){target.textContent=e.message;target.classList.add('error')}notice(e.message)}
@@ -33,10 +33,10 @@ function logout(){token='';refresh='';session=null;sessionStorage.removeItem(key
 function switchTo(view){
  $$('.ctrl-section').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
  $$('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===view));
- const title={overview:'لوحة التحكم',sources:'مزودو IPTV',catalog:'مكتبة المحتوى',users:'حسابات المشاهدين',plans:'الاشتراكات والباقات',codes:'أكواد VIP',tmdb:'TMDb والمعلومات',settings:'النظام والإعدادات'};
+ const title={overview:'لوحة التحكم',sources:'مزودو IPTV',catalog:'مكتبة المحتوى',users:'حسابات المشاهدين',activation:'تفعيل الحساب والمدة',plans:'الاشتراكات والباقات',codes:'أكواد VIP',tmdb:'TMDb والمعلومات',settings:'النظام والإعدادات'};
  $('#ctrl-title').textContent=title[view]||title.overview;
  if(view==='tmdb')loadTmdb().catch(e=>notice(e.message));
- if(view==='users')loadViewers().catch(e=>notice(e.message));
+ if(view==='users'||view==='activation')loadViewers().catch(e=>notice(e.message));
  if(view==='settings')loadStatus().catch(e=>notice(e.message));
  window.scrollTo({top:0,behavior:'instant'});
 }
@@ -77,6 +77,9 @@ function renderSources(){
 function chooseSource(id,scroll){
  currentSource=resources.sources.find(x=>x.id===id)||null;if(!currentSource)return;
  const s=currentSource,form=$('#source-edit-form');
+ $('#code-source-name').value=s.name+' • '+s.kind;
+ $('#code-source-key').value=s.free_code||'';
+ $('#code-source-result').textContent=s.free_enabled?'الكود '+s.free_code+' يعمل مع هذا المصدر':'لا يوجد كود مجاني نشط لهذا المصدر';
  for(const field of ['name','endpoint','free_code','auto_interval_minutes'])if(form.elements[field])form.elements[field].value=s[field]??'';
  for(const field of ['enabled','free_enabled','auto_import','auto_publish'])form.elements[field].checked=s[field]===true;
  form.elements.id.value=id;$('#source-editor-label').value=s.name+' • '+s.kind+' • '+statusText(s);
@@ -118,6 +121,14 @@ function renderPlans(){
   try{await api('/api/admin/plans/'+x.dataset.planOff,{method:'PATCH',body:JSON.stringify({active:false})});await refreshAll()}catch(e){notice(e.message)}
  });
  $('#subscription-records').innerHTML=resources.subscriptions.length?resources.subscriptions.map(x=>item(x.user_id,x.status+' • تنتهي '+new Date(x.ends_at).toLocaleDateString('ar-IQ'))).join(''):empty('لا توجد اشتراكات');
+ for(const picker of ['#viewer-create-plan','#activate-plan']){
+    const dropdown=$(picker),was=dropdown.value;dropdown.replaceChildren();
+    const none=document.createElement('option');none.value='';none.textContent='بدون باقة محددة';dropdown.append(none);
+    for(const plan of resources.plans.filter(x=>x.active)){
+      const o=document.createElement('option');o.value=plan.id;o.textContent=plan.name+' — '+plan.duration_days+' يوم';dropdown.append(o);
+    }
+    if(was&&[...dropdown.options].some(o=>o.value===was))dropdown.value=was;
+  }
  const sel=$('#code-plan');const saved=sel.value;sel.replaceChildren();
  for(const p of resources.plans.filter(x=>x.active)){const option=document.createElement('option');option.value=p.id;option.textContent=p.name+' ('+p.duration_days+' يوم)';sel.append(option)}
  if(saved&&[...sel.options].some(o=>o.value===saved))sel.value=saved;
@@ -125,23 +136,51 @@ function renderPlans(){
 function renderCodes(){
  $('#activation-records').innerHTML=resources.activations.length?resources.activations.map(x=>item(x.note||'كود VIP',x.used_at?'مستخدم':'غير مستخدم'+' • '+new Date(x.created_at).toLocaleDateString('ar-IQ'))).join(''):empty('لا توجد أكواد');
 }
+function viewerStateLabel(v){
+ const paid=v.subscription_status==='active'&&v.ends_at&&new Date(v.ends_at)>new Date();
+ const status=!v.active?'الحساب موقوف':paid?'اشتراك فعّال • '+v.remaining_days+' يوم متبقٍ':'لا يوجد اشتراك نشط';
+ return status+(v.ends_at?' • آخر انتهاء: '+new Date(v.ends_at).toLocaleDateString('ar-IQ'):'');
+}
+function chooseViewer(id,switchPage=false){
+ const chosen=viewerState.items.find(v=>v.user_id===id);
+ if(!chosen)return;
+ viewerState.selected=id;
+ $('#selected-viewer').textContent='الحساب: '+chosen.username+'\n'+viewerStateLabel(chosen);
+ $('#activate-viewer').value=id;
+ $('#activate-summary').textContent=chosen.username+'\n'+viewerStateLabel(chosen);
+ if(switchPage)switchTo('activation');
+}
 async function loadViewers(){
  const root=$('#viewer-records');
  try{
-  const list=await api('/api/admin/viewers');
-  root.innerHTML=list.length?list.map(v=>item(v.username,v.active?'نشط':'متوقف',
-   '<div class="ctrl-item-actions"><button class="btn small" data-viewer-state="'+safe(v.user_id)+'">'+(v.active?'إيقاف':'تفعيل')+'</button><button class="btn small danger" data-viewer-delete="'+safe(v.user_id)+'">حذف</button></div>')).join(''):empty('لم تُنشأ حسابات مستخدمين بعد.');
-  $('[data-viewer-state]').forEach(b=>b.onclick=async()=>{
-   const entry=list.find(v=>v.user_id===b.dataset.viewerState);
-   try{await api('/api/admin/viewers/'+entry.user_id,{method:'PATCH',body:JSON.stringify({active:!entry.active})});notice('تم تعديل الحساب');await loadViewers()}catch(e){notice(e.message)}
+  const params=new URLSearchParams({offset:String(viewerState.offset),limit:'50',search:viewerState.search});
+  const response=await api('/api/admin/viewers?'+params);
+  const list=Array.isArray(response.items)?response.items:[];
+  viewerState.items=list;viewerState.total=response.total||0;
+  $('#viewer-page').textContent='الحسابات '+(viewerState.offset+1)+'–'+(viewerState.offset+list.length)+' من '+viewerState.total;
+  $('#viewer-prev').disabled=viewerState.offset<=0;
+  $('#viewer-next').disabled=viewerState.offset+50>=viewerState.total;
+  root.innerHTML=list.length?list.map(v=>item(v.username,viewerStateLabel(v),
+   '<div class="ctrl-item-actions"><button class="btn small" data-viewer-select="'+safe(v.user_id)+'">إدارة</button>'+
+   '<button class="btn small" data-viewer-activate="'+safe(v.user_id)+'">تفعيل المدة</button>'+
+   '<button class="btn small '+(v.active?'danger':'')+'" data-viewer-state="'+safe(v.user_id)+'">'+(v.active?'إيقاف':'تشغيل')+'</button></div>')).join(''):empty('لا توجد حسابات مطابقة.');
+  $$('[data-viewer-select]').forEach(b=>b.onclick=()=>chooseViewer(b.dataset.viewerSelect));
+  $$('[data-viewer-activate]').forEach(b=>b.onclick=()=>chooseViewer(b.dataset.viewerActivate,true));
+  $$('[data-viewer-state]').forEach(b=>b.onclick=async()=>{
+   const id=b.dataset.viewerState,entry=list.find(v=>v.user_id===id);
+   if(!entry)return;
+   if(!confirm((entry.active?'إيقاف':'تشغيل')+' حساب '+entry.username+'؟'))return;
+   try{await api('/api/admin/viewers/'+id,{method:'PATCH',body:JSON.stringify({active:!entry.active})});notice('تم تعديل الحساب');await loadViewers()}
+   catch(e){notice(e.message)}
   });
-  $('[data-viewer-delete]').forEach(b=>b.onclick=async()=>{
-   if(!confirm('حذف هذا الحساب نهائياً؟'))return;
-   try{await api('/api/admin/viewers/'+b.dataset.viewerDelete,{method:'DELETE'});notice('تم حذف الحساب');await loadViewers()}catch(e){notice(e.message)}
-  });
- }catch(e){root.innerHTML=empty('تعذّر جلب الحسابات: '+e.message)}
+  const select=$('#activate-viewer'),old=select.value;select.replaceChildren();
+  const emptyOption=document.createElement('option');emptyOption.value='';emptyOption.textContent='اختر مستخدماً...';select.append(emptyOption);
+  for(const v of list){const o=document.createElement('option');o.value=v.user_id;o.textContent=v.username+(v.active?'':' [موقوف]');select.append(o)}
+  if(viewerState.selected&&list.some(x=>x.user_id===viewerState.selected))select.value=viewerState.selected;
+  else if(list.some(x=>x.user_id===old))select.value=old;
+  if(select.value)chooseViewer(select.value);
+ }catch(e){root.innerHTML=empty('تعذّر جلب الحسابات: '+e.message);notice(e.message)}
 }
-
 async function loadTmdb(){
  try{const v=await api('/api/admin/extra/tmdb');$('#tmdb-status').textContent=v.configured?'TMDb مربوط ومفتاحه مخزّن مشفّراً.':'أضف مفتاح TMDb أولاً.';$('#tmdb-status').classList.remove('error')}
  catch(e){fail(e,$('#tmdb-status'))}
