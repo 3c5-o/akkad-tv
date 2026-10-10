@@ -145,3 +145,76 @@ test('HTTP M3U index uses approved same-host public endpoint',async()=>{
  assert.equal(data.items.length,1);
  assert.ok(!JSON.stringify(data).includes('token=secret'));
 });
+
+
+test('preflight validates real account without writing credentials or source',async()=>{
+ const {handlePreflight}=await import('../source-manager.mjs');
+ const keys=['AKKAD_ALLOWED_SOURCE_HOSTS','AKKAD_ALLOW_HTTP_SOURCES','AKKAD_SOURCE_ENCRYPTION_KEY'];
+ const old=Object.fromEntries(keys.map(x=>[x,process.env[x]]));
+ process.env.AKKAD_ALLOWED_SOURCE_HOSTS='iptv.example.com';process.env.AKKAD_ALLOW_HTTP_SOURCES='true';process.env.AKKAD_SOURCE_ENCRYPTION_KEY='11'.repeat(32);
+ try{
+  const request={method:'POST'};
+  let writes=0,validated=0;
+  const args={req:request,p:'/api/admin/sources/preflight',admin:async()=>({token:'admin'}),
+   readBody:async()=>({name:'مزود مرخص',kind:'xtream',endpoint:'http://iptv.example.com:8080',
+     license_confirmed:true,allow_insecure_http:true,username:'test',password:'only-in-request'}),
+   json:(_res,status,data)=>({status,data}),
+   apiRequest:async()=>{writes++;throw new Error('Must not write during preflight')},
+   inspect:async(source,credentials,hosts,opts)=>{
+     validated++;assert.equal(source.endpoint,'http://iptv.example.com:8080');
+     assert.equal(credentials.password,'only-in-request');
+     assert.equal(hosts,'iptv.example.com');
+     assert.equal(opts.allowHttp,true);
+     return {status:'Active',counts:{live:10,movie:8,series:7},account_verified:true};
+   }};
+  const result=await handlePreflight(args);
+  assert.equal(result.status,200);assert.equal(result.data.saved,false);
+  assert.equal(result.data.overview.counts.movie,8);
+  assert.equal(validated,1);assert.equal(writes,0);
+  await assert.rejects(()=>handlePreflight({...args,inspect:async()=>{throw new Error('Bad credentials');}}),/Bad credentials/);
+  assert.equal(writes,0);
+ }finally{for(const x of keys){if(old[x]===undefined)delete process.env[x];else process.env[x]=old[x];}}
+});
+test('verified create persists encrypted credentials only after successful real check',async()=>{
+ const {handlePreflight}=await import('../source-manager.mjs');
+ const keys=['AKKAD_ALLOWED_SOURCE_HOSTS','AKKAD_ALLOW_HTTP_SOURCES','AKKAD_SOURCE_ENCRYPTION_KEY'];
+ const old=Object.fromEntries(keys.map(x=>[x,process.env[x]]));
+ process.env.AKKAD_ALLOWED_SOURCE_HOSTS='iptv.example.com';process.env.AKKAD_ALLOW_HTTP_SOURCES='true';process.env.AKKAD_SOURCE_ENCRYPTION_KEY='ab'.repeat(32);
+ try{
+   const calls=[];
+   const r=await handlePreflight({
+    p:'/api/admin/sources/verified-create',req:{method:'POST'},res:{},admin:async()=>({token:'admin'}),
+    readBody:async()=>({name:'تجريبي',kind:'xtream',endpoint:'http://iptv.example.com:8080',
+      license_confirmed:true,allow_insecure_http:true,username:'allowed',password:'private-credential'}),
+    json:(_res,status,data)=>({status,data}),
+    inspect:async()=>({status:'Active',expires_at:null,max_connections:1,active_connections:0,
+      counts:{live:3,movie:4,series:5},checked_at:new Date().toISOString()}),
+    apiRequest:async(path,options)=>{
+      calls.push({path,body:options.body});
+      if(path.endsWith('/akkad_sources'))return [{id:'2e68ef4d-9444-485e-b2cf-d07752760e40',name:'تجريبي',kind:'xtream'}];
+      if(path.endsWith('/akkad_source_credentials'))return null;
+      throw new Error('Unexpected path');
+    }
+   });
+   assert.equal(r.status,201);assert.equal(r.data.saved,true);assert.equal(calls.length,2);
+   assert.equal(calls[0].body.enabled,true);assert.equal(calls[0].body.last_check_status,'ok');
+   assert.equal(calls[1].body.source_id,'2e68ef4d-9444-485e-b2cf-d07752760e40');
+   assert.ok(!JSON.stringify(calls).includes('private-credential'));
+   assert.ok(!JSON.stringify(calls[0].body).includes('allowed'));
+ }finally{for(const x of keys){if(old[x]===undefined)delete process.env[x];else process.env[x]=old[x];}}
+});
+test('live Xtream account inspection returns independent channel/movie/series totals',async()=>{
+ const {inspectAccount}=await import('../source-manager.mjs');
+ const source={kind:'xtream',endpoint:'http://iptv.example.com:8080',id:sourceId};
+ const opts={allowHttp:true,lookup:async()=>[{address:'8.8.8.8'}],fetch:async url=>{
+   const action=new URL(url).searchParams.get('action');
+   const fixture=action==='get_live_streams'?[{},{}]:action==='get_vod_streams'?[{}]:
+     action==='get_series'?[{},{},{}]:
+     {user_info:{auth:1,status:'Active',exp_date:'1893456000',active_cons:'1',max_connections:'2'}};
+   return new Response(JSON.stringify(fixture),{status:200});
+ }};
+ const result=await inspectAccount(source,{username:'demo',password:'demo'},'iptv.example.com',opts);
+ assert.equal(result.account_verified,true);
+ assert.deepEqual(result.counts,{live:2,movie:1,series:3});
+ assert.equal(result.max_connections,2);assert.equal(result.active_connections,1);
+});
