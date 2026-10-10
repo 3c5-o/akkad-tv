@@ -65,3 +65,37 @@ test('Xtream fetch can be checked safely using mocked network and DNS',async()=>
  assert.equal(result.items[0].title,'Test Film (2025)');
  assert.ok(!JSON.stringify(result).includes('"password"'));
 });
+
+
+test('M3U batches advance through distinct entries instead of repeating the first group',()=>{
+ const rows=['#EXTM3U'];
+ for(let i=0;i<7;i++){
+  rows.push('#EXTINF:-1 group-title="أفلام" tvg-name="فيلم '+i+'",فيلم '+i);
+  rows.push('https://iptv.example.com/movie/'+i+'?access=hidden'+i);
+ }
+ const first=parseM3U(rows.join('\n'),sourceId,'movie',3,0);
+ const second=parseM3U(rows.join('\n'),sourceId,'movie',3,3);
+ const last=parseM3U(rows.join('\n'),sourceId,'movie',3,6);
+ assert.equal(first.totals.movie,7);
+ assert.deepEqual(first.items.map(x=>x.title),['فيلم 0','فيلم 1','فيلم 2']);
+ assert.deepEqual(second.items.map(x=>x.title),['فيلم 3','فيلم 4','فيلم 5']);
+ assert.deepEqual(last.items.map(x=>x.title),['فيلم 6']);
+ assert.ok(!JSON.stringify(first).includes('access=hidden'));
+});
+test('Xtream metadata pagination works using source cursor',async()=>{
+ const source={id:sourceId,kind:'xtream',endpoint:'https://iptv.example.com'};
+ const options={lookup:async()=>[{address:'8.8.8.8'}],fetch:async u=>{
+  const action=new URL(u).searchParams.get('action');
+  const rows=action==='get_vod_categories'?[{category_id:1,category_name:'أفلام'}]:
+    Array.from({length:6},(_,i)=>({stream_id:i+1,name:'Film '+i+' (2026)',category_id:1}));
+  return new Response(JSON.stringify(rows),{status:200});
+ },offset:3};
+ const out=await collectSource(source,{username:'user',password:'private'},'movie',2,allowlist,options);
+ assert.deepEqual(out.items.map(x=>x.title),['Film 3 (2026)','Film 4 (2026)']);
+ assert.equal(out.total,6);
+ assert.ok(!JSON.stringify(out).includes('private'));
+});
+test('Xtream expired accounts cannot be marked as healthy',()=>{
+ assert.throws(()=>xtreamOverview({user_info:{auth:1,status:'Expired',exp_date:'1700000000'}}));
+ assert.throws(()=>xtreamOverview({user_info:{auth:1,status:'Active',exp_date:'1700000000'}}));
+});
