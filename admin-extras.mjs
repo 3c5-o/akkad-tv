@@ -31,6 +31,16 @@ export async function adminExtras({req,res,p,auth,readBody,apiRequest,json}){
  const get=(t,query='')=>q(t,query,admin.token);
  const change=(t,method,query,body)=>apiRequest('/rest/v1/akkad_'+t+query,{method,body,token:admin.token,extraHeaders:{Prefer:t==='config'?'resolution=merge-duplicates,return=representation':'return=representation'}});
  const route=p.slice('/api/admin/extra/'.length);
+ if(route==='status'&&req.method==='GET'){
+  const configured=await get('config','?select=setting_key&setting_key=eq.tmdb_api');
+  return json(res,200,{
+   service_role_configured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+   username_secret_configured:Boolean(process.env.AKKAD_USERNAME_SECRET),
+   tmdb_configured:Boolean(configured?.length),
+   scheduler_available:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+   source_host_allowlist_configured:Boolean(process.env.AKKAD_ALLOWED_SOURCE_HOSTS)
+  });
+ }
  if(route==='tmdb'){
   if(req.method==='GET'){
    const state=await get('config','?select=setting_key,updated_at&setting_key=eq.tmdb_api');
