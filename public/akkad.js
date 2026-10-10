@@ -134,7 +134,7 @@ const recordTitle={
  devices:r=>r.device_label||r.device_hash
 };
 function recordDescription(section,r){
- if(section==='sources')return (r.enabled?'نشط':'معطّل')+' • '+r.endpoint+' • آخر فحص: '+(r.last_check_status||'لم يُفحص')+' • قنوات '+(r.live_count||0)+' / أفلام '+(r.movie_count||0)+' / مسلسلات '+(r.series_count||0)+(r.last_error?' • '+r.last_error:'');
+ if(section==='sources')return (r.enabled?'نشط':'معطّل')+(r.allow_insecure_http?' • HTTP مسموح':' • HTTPS')+' • '+r.endpoint+' • آخر فحص: '+(r.last_check_status||'لم يُفحص')+' • قنوات '+(r.live_count||0)+' / أفلام '+(r.movie_count||0)+' / مسلسلات '+(r.series_count||0)+(r.last_error?' • '+r.last_error:'');
  if(section==='catalog')return (r.published?'منشور':'مسودة')+' • '+r.category+' • '+(r.tmdb_id?'TMDb '+r.tmdb_id:'بدون TMDb');
  if(section==='activations')return 'تاريخ الإنشاء: '+new Date(r.created_at).toLocaleString('ar-IQ')+(r.disabled?' • موقوف':'');
  if(section==='plans')return 'نوع: '+r.kind+' • الأجهزة: '+r.max_devices+' • الاتصالات: '+r.max_connections+' • '+(r.active?'نشط':'متوقف');
@@ -191,7 +191,11 @@ function getTyped(form){
  for(const [k,v] of new FormData(form).entries()){if(v==='')continue;
   data[k]=['duration_days','max_devices','max_connections','tmdb_id','release_year','priority'].includes(k)?Number(v):v;
  }
- if(form.dataset.create==='sources')data.license_confirmed=$('[name=license_confirmed]',form).checked;
+ if(form.dataset.create==='sources'){
+  data.license_confirmed=$('[name=license_confirmed]',form).checked;
+  data.allow_insecure_http=$('[name=allow_insecure_http]',form).checked;
+  if(/^http:\/\//i.test(String(data.endpoint||''))&&!data.allow_insecure_http)throw new Error('لإضافة مصدر HTTP فعّل خيار السماح بـHTTP بعد قراءة التحذير');
+ }
  if(form.dataset.create==='catalog')data.published=false;
  if(form.dataset.create==='subscriptions' && data.ends_at) data.ends_at=new Date(data.ends_at).toISOString();
  return data;
