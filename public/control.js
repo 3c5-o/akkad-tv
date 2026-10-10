@@ -77,7 +77,7 @@ function renderSources(){
 function chooseSource(id,scroll){
  currentSource=resources.sources.find(x=>x.id===id)||null;if(!currentSource)return;
  const s=currentSource,form=$('#source-edit-form');
- for(const field of ['name','free_code','auto_interval_minutes'])if(form.elements[field])form.elements[field].value=s[field]??'';
+ for(const field of ['name','endpoint','free_code','auto_interval_minutes'])if(form.elements[field])form.elements[field].value=s[field]??'';
  for(const field of ['enabled','free_enabled','auto_import','auto_publish'])form.elements[field].checked=s[field]===true;
  form.elements.id.value=id;$('#source-editor-label').value=s.name+' • '+s.kind+' • '+statusText(s);
  const xt=s.kind==='xtream';
