@@ -98,8 +98,13 @@ async function route(req,res) {
     const kind=(url.searchParams.get('kind')||'').toLowerCase();
     if(kind && !['live','movie','series','anime'].includes(kind)) return json(res,400,{error:'Invalid category'});
     const t=p==='/api/catalog'?'akkad_catalog':'akkad_plans';
+    const viewer=t==='akkad_catalog'?await auth(req):null;
+    if(viewer?.role==='user'){
+      const rows=await apiRequest('/rest/v1/akkad_viewer_accounts?select=active&user_id=eq.'+viewer.user.id,{token:viewer.token});
+      if(!rows?.[0]?.active) return json(res,403,{error:'حساب المستخدم غير مفعّل'});
+    }
     const query=t==='akkad_catalog'?'?select=id,title,kind,category,description,poster_url,release_year&published=eq.true&order=created_at.desc&limit=200'+(kind?'&kind=eq.'+kind:''):'?select=id,name,duration_days,max_devices,max_connections,kind&active=eq.true&order=duration_days.asc';
-    return json(res,200,await apiRequest('/rest/v1/'+t+query));
+    return json(res,200,await apiRequest('/rest/v1/'+t+query,{token:viewer?.token}));
   }
   if(req.method==='POST' && p==='/api/redeem'){
     const a=await auth(req);
