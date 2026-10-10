@@ -23,3 +23,20 @@
 .admin-nav{position:sticky;top:0;z-index:100;background:#0d1119ee;display:flex;gap:6px;overflow-x:auto;padding:9px 0;margin-bottom:16px;border-bottom:1px solid var(--edge)}.admin-tab{background:#1c232b;color:#c9c5c0;border:1px solid #4c4140;border-radius:9px;padding:10px 13px;white-space:nowrap;font-weight:700}.admin-tab.active{background:#a26e38;color:#0e1013;border-color:#ffc57d}
 .admin-section{display:none}.admin-section.active{display:block}.admin-card{padding:20px;margin-bottom:14px}.admin-card h3{margin:0 0 13px;color:var(--gold2)}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.form-actions{grid-column:1/-1}.admin-list{display:grid;gap:10px}.record{background:#191f27;border:1px solid #4b4236;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;justify-content:space-between}.record-title{font-weight:800}.record-detail{color:#bdb7ab;font-size:.84rem;word-break:break-all}.record-content{min-width:0;flex:1}.admin-bottom{position:fixed;bottom:0;left:0;right:0;background:#0c111a;border-top:1px solid #926433;display:flex;justify-content:space-around;z-index:80;padding:8px 10px}.admin-bottom button{border:0;background:none;color:#d9c4a2;display:flex;flex-direction:column;align-items:center;font-weight:700;font-size:.72rem;gap:2px}.admin-bottom span{font-size:1.3rem}
 @media(max-width:600px){.admin-page{padding:13px 12px 90px}.admin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-grid{grid-template-columns:1fr}.admin-card{padding:14px}.admin-header .logo{font-size:1.5rem}.admin-nav{margin-left:-12px;margin-right:-12px;padding-right:12px}.record{flex-wrap:wrap}.record .btn{margin-right:auto}}
+
+
+/* AKKAD Video Player */
+.watch-shade{position:fixed;inset:0;background:#04080de8;z-index:180;display:flex;align-items:center;justify-content:center;padding:22px;backdrop-filter:blur(12px)}
+.watch-panel{background:linear-gradient(155deg,#131c26,#121315);border:1px solid #b17c43;border-radius:19px;box-shadow:0 20px 90px #000b;width:min(1180px,97vw);max-height:96vh;display:flex;flex-direction:column;overflow:hidden}
+.watch-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid #6c4c2a}
+.watch-bar strong{font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.watch-actions{display:flex;gap:7px}
+#watch-video{background:#000;min-height:min(47vw,400px);width:100%;overflow:hidden}
+#watch-video video{width:100%;max-height:70vh;display:block;object-fit:contain;background:#000}
+.watch-message{color:#d4c2a6;padding:9px 18px;font-size:.89rem}
+.watch-episodes{padding:12px 18px;overflow-y:auto;max-height:27vh;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.watch-episodes h3{grid-column:1/-1;color:#e2b477;margin:0}
+.watch-episode{padding:10px;text-align:right;background:#1b2630;color:#f1e5cd;border:1px solid #766044;border-radius:10px;cursor:pointer}
+.watch-episode:hover,.watch-episode:focus-visible{border-color:#f1c17d;background:#443322}
+.watch-episodes.hidden{display:none}
+@media(max-width:730px){.watch-shade{padding:4px}.watch-panel{max-height:100vh;width:100%;border-radius:10px}#watch-video{min-height:200px}.watch-episodes{grid-template-columns:repeat(2,1fr)}}
