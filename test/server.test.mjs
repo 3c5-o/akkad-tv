@@ -20,5 +20,9 @@ test('local health and portrait/landscape routes', async () => {
     assert.match(await admin.text(),/الإدارة/);
     const unknown=await fetch('http://127.0.0.1:'+port+'/api/unknown');
     assert.equal(unknown.status,404);
+    const protectedCheck=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/22c1c6b4-c44e-4cd7-9fac-eb2dfc29d00f/check',{method:'POST'});
+    assert.equal(protectedCheck.status,401);
+    const protectedSync=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/22c1c6b4-c44e-4cd7-9fac-eb2dfc29d00f/sync',{method:'POST'});
+    assert.equal(protectedSync.status,401);
   } finally {child.kill();}
 });
