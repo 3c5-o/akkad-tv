@@ -78,7 +78,11 @@ async function requestMedia(upstream,source,{range}={}){
  const headers={'user-agent':'AKKAD-TV/1.0'};
  if(range&&/^bytes=\d+-\d*$/.test(range))headers.range=range;
  try{
-  const response=await fetch(target,{redirect:'manual',headers,signal:AbortSignal.timeout(18000)});
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),18000);
+  let response;
+  try{response=await fetch(target,{redirect:'manual',headers,signal:controller.signal});}
+  finally{clearTimeout(timer)}
   if(!response.ok)error('رفض المصدر تشغيل الملف (HTTP '+response.status+')',response.status===404?404:502);
   return {response,upstream:target};
  }catch(e){if(e.status)throw e;error('تعذر الاتصال بخادم تشغيل IPTV',502);}
