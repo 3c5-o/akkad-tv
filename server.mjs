@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { handleSourceAction, handlePreflight, validateEndpoint } from './source-manager.mjs';
 import { adminExtras } from './admin-extras.mjs';
 import { viewerRoutes } from './viewer-service.mjs';
+import { startAutoImport } from './auto-import.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -165,3 +166,4 @@ async function route(req,res) {
   return json(res,404,{error:'Not found'});
 }
 http.createServer(async(req,res)=>{try{await route(req,res);}catch(err){const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:500;console.error('API',req.method,req.url,status,err.message);json(res,status,{error:status===500?'خطأ داخلي في الخادم':err.message});}}).listen(port,'0.0.0.0',()=>console.log('AKKAD CORE listening on',port));
+startAutoImport({url:supaUrl,publishableKey:apiKey});
