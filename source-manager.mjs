@@ -10,19 +10,24 @@ export function publicAddress(ip){
  if(t===6){const v=ip.toLowerCase();return v!=='::1'&&v!=='::'&&!/^(fc|fd|ff|fe80:|2001:db8:)/.test(v)&&!v.startsWith('::ffff:');}
  return false;
 }
-export function validateEndpoint(value,allowlist,{query=false,host=null}={}){
+export function validateEndpoint(value,allowlist,{query=false,host=null,allowHttp=false}={}){
  let u;try{u=new URL(value);}catch{throw error('رابط المصدر غير صالح');}
  const allowed=String(allowlist||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
- if(u.protocol!=='https:'||u.username||u.password||u.hash||(!query&&u.search)||net.isIP(u.hostname)||!u.hostname.includes('.')||!allowed.includes(u.hostname.toLowerCase())||(host&&u.hostname!==host))
-  throw error('يجب استخدام خادم HTTPS مُدرج ضمن AKKAD_ALLOWED_SOURCE_HOSTS بدون بيانات دخول مكشوفة');
+ const literalIP=net.isIP(u.hostname);
+ const permittedProtocol=u.protocol==='https:'||(allowHttp===true&&u.protocol==='http:');
+ const safeHost=literalIP?literalIP===4&&publicAddress(u.hostname):u.hostname.includes('.')&&!u.hostname.endsWith('.local')&&u.hostname!=='localhost';
+ if(!permittedProtocol||u.username||u.password||u.hash||(!query&&u.search)||!safeHost||!allowed.includes(u.hostname.toLowerCase())||(host&&u.hostname!==host))
+  throw error('المصدر غير مسموح: اختر HTTP المصرّح به أو HTTPS، وأضف نطاقاً أو IP عاماً في AKKAD_ALLOWED_SOURCE_HOSTS');
  return u;
 }
 async function readRemote(url,allowed,options={}){
- const u=validateEndpoint(url,allowed,{query:true,host:options.host||null});
+ const u=validateEndpoint(url,allowed,{query:true,host:options.host||null,allowHttp:options.allowHttp===true});
  let ips;
- try{ips=await (options.lookup||lookup)(u.hostname,{all:true});}catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
+ try{
+   ips=net.isIP(u.hostname)===4?[{address:u.hostname}]:await (options.lookup||lookup)(u.hostname,{all:true});
+ }catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
  if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
- let r;try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw error('تعذر الاتصال بالمصدر الآمن',502);}
+ let r;try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw error('تعذر الاتصال بخادم IPTV',502);}
  if(!r.ok)throw error('المصدر أعاد HTTP '+r.status,502);
  const max=24*1024*1024;
  if(Number(r.headers.get('content-length')||0)>max)throw error('قائمة المصدر أكبر من الحد',413);
@@ -94,7 +99,7 @@ async function xtream(endpoint,creds,action,allowlist,options={}){
  try{return JSON.parse(response);}catch{throw error('صيغة Xtream غير صحيحة',502);}
 }
 export async function verifySource(source,credentials,allowlist,options={}){
- validateEndpoint(source.endpoint,allowlist);
+ validateEndpoint(source.endpoint,allowlist,{allowHttp:options.allowHttp===true});
  if(source.kind==='xtream')return xtreamOverview(await xtream(source.endpoint,credentials,null,allowlist,options));
  if(source.kind==='m3u'){
   const text=await readRemote(credentials.playlist_url,allowlist,{...options,host:new URL(source.endpoint).hostname});
@@ -137,15 +142,18 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  if(req.method!=='POST')throw error('طريقة الطلب غير مدعومة',405);
  if(!source.license_confirmed)throw error('يجب تأكيد حقوق المصدر أولاً');
  const allowlist=process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'';
+ const allowHttp=source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true';
+ const transport={allowHttp};
+ if(new URL(source.endpoint).protocol==='http:'&&!allowHttp)throw error('هذا المصدر يستخدم HTTP: يجب تأكيد السماح لكل مصدر وتفعيل الخيار الآمن في إعدادات Railway',400);
  if(action==='credentials'){
-  validateEndpoint(source.endpoint,allowlist);
+  validateEndpoint(source.endpoint,allowlist,{allowHttp});
   const b=await readBody(req);let data;
   if(source.kind==='xtream'){
    if(typeof b.username!=='string'||typeof b.password!=='string'||!b.username.trim()||!b.password||b.username.length>200||b.password.length>250)throw error('الاسم أو كلمة المرور غير صحيحة');
    data={username:b.username.trim(),password:b.password};
   }else if(source.kind==='m3u'){
    if(typeof b.playlist_url!=='string'||b.playlist_url.length>4096)throw error('رابط M3U غير صحيح');
-   validateEndpoint(b.playlist_url,allowlist,{query:true,host:new URL(source.endpoint).hostname});
+   validateEndpoint(b.playlist_url,allowlist,{query:true,host:new URL(source.endpoint).hostname,allowHttp});
    data={playlist_url:b.playlist_url};
   }else throw error('الحفظ التلقائي لهذا النوع لم يُدعَم بعد');
   const enc=encrypt(data,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
@@ -156,7 +164,7 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  const credentials=decrypt(credentialsRecord?.[0],process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
  if(action==='check'){
   try{
-   const overview=await verifySource(source,credentials,allowlist);
+   const overview=await verifySource(source,credentials,allowlist,transport);
    await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'ok',last_error:null,enabled:true,provider_expires_at:overview.expires_at||null,provider_max_connections:overview.max_connections??null,provider_active_connections:overview.active_connections??null}});
    return json(res,200,{ok:true,overview});
   }catch(e){
@@ -178,7 +186,7 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  }
  const job=await query('source_sync_jobs',{method:'POST',body:{source_id:id,kind,requested_limit:limit,requested_offset:offset,status:'running'},prefer:'return=representation'});
  try{
-  const gathered=await collectSource(source,credentials,kind,limit,allowlist,{offset});
+  const gathered=await collectSource(source,credentials,kind,limit,allowlist,{offset,...transport});
   const items=[...new Map(gathered.items.map(x=>[x.external_id,x])).values()];
   if(items.length){
    const distinct=[...new Map(items.map(x=>[x.dedupe_key,x])).values()];
