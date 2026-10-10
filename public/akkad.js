@@ -44,7 +44,11 @@ async function api(path,options={},retried=false){
   const message=String(data?.error||data?.message||'فشل الطلب');
   const expired=/(?:jwt.*expired|token.*expired|expired.*token|invalid jwt|token is expired|invalid claims)/i.test(message);
   if(!retried&&expired&&refreshToken&&await refreshSession())return api(path,options,true);
-  if(expired)throw new Error('انتهت جلسة الإدارة؛ سجل دخولك من جديد');
+  if(expired){
+    if(mode==='admin')$('#admin-login')?.classList.remove('hidden');
+    else $('#tv-login')?.classList.remove('hidden');
+    throw new Error('انتهت جلسة الدخول؛ سجل دخولك من جديد');
+  }
   throw new Error(message);
  }
  return data;
