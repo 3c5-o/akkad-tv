@@ -57,4 +57,15 @@
       </div><p class="note">بعض الإعدادات مثل اختيار مسارات الصوت والترجمة تعتمد على إمكانات الفيديو والمتصفح أو تطبيق Android الأصلي.</p></section>
     </div>
   </div></main>
-</div><div id="toast" role="status" class="toast"></div><script src="/akkad.js" defer></script></body></html>
+</div><div id="tv-watch-modal" class="watch-shade hidden" role="dialog" aria-modal="true" aria-label="مشغل أكّد">
+  <div class="watch-panel">
+   <div class="watch-bar"><strong id="watch-title" class="gold">مشغل أكّد</strong>
+     <div class="watch-actions"><button type="button" class="btn small" id="watch-fullscreen">ملء الشاشة</button>
+       <button type="button" class="btn small danger" id="watch-close">إغلاق</button></div>
+   </div>
+   <div id="watch-video" class="tv-player"><span class="muted">جارٍ تهيئة المشغل...</span></div>
+   <div class="watch-message" id="watch-message" role="status">جاري التحميل...</div>
+   <div id="watch-episodes" class="watch-episodes hidden"></div>
+  </div>
+</div>
+<div id="toast" role="status" class="toast"></div><script src="/hls.min.js" defer></script><script src="/akkad.js" defer></script></body></html>
