@@ -240,13 +240,14 @@ function setupSourceTools(){
          (data.max_connections!=null?' • حد الاتصالات: '+data.max_connections:'')+
          (data.counts?' • عدد القنوات: '+data.counts.live+' • الأفلام: '+data.counts.movie+' • المسلسلات: '+data.counts.series:'');
      }else if(action==='sync'){
-       result.textContent='نجحت مزامنة '+(body.kind||'')+' • تم تسجيل '+response.imported+' عنصر • المصدر يحتوي '+response.available+
-         ' • المتجاوز: '+response.skipped+
+       result.textContent=(response.complete?'اكتملت مزامنة هذا القسم':'نجحت مزامنة '+(body.kind||''))+' • تم تسجيل '+response.imported+' عنصر • المصدر يحتوي '+response.available+
+         ' • موضع الدفعة التالية: '+(response.next_offset??0)+' • المزيد: '+(response.has_more?'نعم':'لا')+' • المتجاوز: '+(response.skipped||0)+
          ' • إجمالي المحفوظ للمصدر: '+JSON.stringify(response.stored||{})+
          '\nالمحتوى يبقى مسودة حتى تراجعه وتنشره في قسم المحتوى.';
      }else if(action==='jobs'){
        result.textContent=(response.jobs||[]).slice(0,8).map(j=>j.kind+' • '+j.status+' • '+j.imported_count+' عنصر • '+new Date(j.started_at).toLocaleString('ar-IQ')+(j.error_summary?' • '+j.error_summary:'')).join('\n')||'لا يوجد سجل مزامنة';
      }
+     if(action==='sync')$('#source-sync-reset').checked=false;
      notice('اكتمل الطلب');
      if(['check','sync'].includes(action)){
        await loadAdminSection('sources');
@@ -264,7 +265,7 @@ function setupSourceTools(){
  };
  $('#source-check').onclick=()=>run(null,'check');
  $('#source-jobs').onclick=()=>run(null,'jobs');
- $('#source-sync').onclick=()=>run(null,'sync',{kind:$('#source-sync-kind').value,limit:Number($('#source-sync-limit').value)});
+ $('#source-sync').onclick=()=>run(null,'sync',{kind:$('#source-sync-kind').value,limit:Number($('#source-sync-limit').value),reset:$('#source-sync-reset').checked});
 }
 
 function setupStreamForm(){
