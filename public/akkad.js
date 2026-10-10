@@ -134,7 +134,7 @@ const recordTitle={
  devices:r=>r.device_label||r.device_hash
 };
 function recordDescription(section,r){
- if(section==='sources')return (r.enabled?'نشط':'معطّل')+' • '+r.endpoint+' • الترخيص: '+(r.license_confirmed?'مؤكد':'غير مؤكد');
+ if(section==='sources')return (r.enabled?'نشط':'معطّل')+' • '+r.endpoint+' • آخر فحص: '+(r.last_check_status||'لم يُفحص')+' • قنوات '+(r.live_count||0)+' / أفلام '+(r.movie_count||0)+' / مسلسلات '+(r.series_count||0)+(r.last_error?' • '+r.last_error:'');
  if(section==='catalog')return (r.published?'منشور':'مسودة')+' • '+r.category+' • '+(r.tmdb_id?'TMDb '+r.tmdb_id:'بدون TMDb');
  if(section==='activations')return 'تاريخ الإنشاء: '+new Date(r.created_at).toLocaleString('ar-IQ')+(r.disabled?' • موقوف':'');
  if(section==='plans')return 'نوع: '+r.kind+' • الأجهزة: '+r.max_devices+' • الاتصالات: '+r.max_connections+' • '+(r.active?'نشط':'متوقف');
@@ -163,6 +163,7 @@ async function loadAdminSection(section){
  const data=await api('/api/admin/'+section);
  records[section]=Array.isArray(data)?data:[];
  renderRecords(section);
+ if(section==='sources')fillSourceSelector();
  if(section==='plans')fillPlans();
 }
 function fillPlans(){
@@ -195,6 +196,77 @@ function getTyped(form){
  if(form.dataset.create==='subscriptions' && data.ends_at) data.ends_at=new Date(data.ends_at).toISOString();
  return data;
 }
+
+function fillSourceSelector(){
+ const select=$('#source-selected');if(!select)return;
+ const old=select.value;
+ select.replaceChildren();
+ const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='اختر مصدراً';select.append(placeholder);
+ for(const source of records.sources||[]){
+   const opt=document.createElement('option');opt.value=source.id;opt.textContent=source.name+' ('+source.kind+')';select.append(opt);
+ }
+ if(old&&Array.from(select.options).some(o=>o.value===old))select.value=old;
+ else if(select.options.length===2)select.selectedIndex=1;
+ select.dispatchEvent(new Event('change'));
+}
+function setupSourceTools(){
+ const select=$('#source-selected');if(!select)return;
+ const result=$('#source-action-result');
+ const selected=()=>((records.sources||[]).find(s=>s.id===select.value));
+ function change(){
+   const source=selected(),m3u=source?.kind==='m3u';
+   $('#source-tools [data-xtream-field]').forEach(el=>el.classList.toggle('hidden',m3u));
+   $('#source-m3u-wrap').classList.toggle('hidden',!m3u);
+   const status=source?.enabled?'مفعّل':'معطّل';
+   result.textContent=source?'المصدر: '+source.name+' • '+status+' • آخر فحص: '+(source.last_check_status||'لم يفحص'):'اختر مصدر IPTV';
+ }
+ select.addEventListener('change',change);change();
+ async function run(button,action,body){
+   const source=selected();
+   if(!source){notice('اختر مصدراً أولاً');return;}
+   const buttons=$('#source-tools button');
+   buttons.forEach(b=>b.disabled=true);
+   result.textContent='جارٍ تنفيذ '+action+'...';
+   try{
+     const response=await api('/api/admin/sources/'+source.id+'/'+action,{method:action==='jobs'?'GET':'POST',...(body?{body:JSON.stringify(body)}:{})});
+     if(action==='credentials'){
+       $('#source-password').value='';
+       $('#source-m3u-url').value='';
+       result.textContent='تم حفظ بيانات اعتماد الحساب في قاعدة البيانات بصورة مشفّرة. اضغط فحص المصدر.';
+     }else if(action==='check'){
+       const data=response.overview||{};
+       result.textContent='اتصال المصدر: '+(data.status||'ناجح')+
+         (data.expires_at?' • الصلاحية: '+new Date(data.expires_at).toLocaleDateString('ar-IQ'):'')+
+         (data.max_connections!=null?' • حد الاتصالات: '+data.max_connections:'')+
+         (data.counts?' • عدد القنوات: '+data.counts.live+' • الأفلام: '+data.counts.movie+' • المسلسلات: '+data.counts.series:'');
+     }else if(action==='sync'){
+       result.textContent='نجحت مزامنة '+(body.kind||'')+' • تم تسجيل '+response.imported+' عنصر • المصدر يحتوي '+response.available+
+         ' • المتجاوز: '+response.skipped+
+         ' • إجمالي المحفوظ للمصدر: '+JSON.stringify(response.stored||{})+
+         '\nالمحتوى يبقى مسودة حتى تراجعه وتنشره في قسم المحتوى.';
+     }else if(action==='jobs'){
+       result.textContent=(response.jobs||[]).slice(0,8).map(j=>j.kind+' • '+j.status+' • '+j.imported_count+' عنصر • '+new Date(j.started_at).toLocaleString('ar-IQ')+(j.error_summary?' • '+j.error_summary:'')).join('\n')||'لا يوجد سجل مزامنة';
+     }
+     notice('اكتمل الطلب');
+     if(['check','sync'].includes(action)){
+       await loadAdminSection('sources');
+       if(action==='sync')await loadAdminSection('catalog');
+       select.value=source.id;change();
+     }
+   }catch(err){result.textContent='تعذر إكمال '+action+': '+err.message;notice(err.message);}
+   finally{buttons.forEach(b=>b.disabled=false);}
+ }
+ $('#source-save-credentials').onclick=()=>{
+   const source=selected();if(!source){notice('اختر المصدر');return;}
+   if(source.kind==='xtream')run(null,'credentials',{username:$('#source-username').value,password:$('#source-password').value});
+   else if(source.kind==='m3u')run(null,'credentials',{playlist_url:$('#source-m3u-url').value});
+   else notice('نوع المصدر غير مدعوم لهذه الخطوة');
+ };
+ $('#source-check').onclick=()=>run(null,'check');
+ $('#source-jobs').onclick=()=>run(null,'jobs');
+ $('#source-sync').onclick=()=>run(null,'sync',{kind:$('#source-sync-kind').value,limit:Number($('#source-sync-limit').value)});
+}
+
 function setupStreamForm(){
  const section=$('[data-admin-section="catalog"]');if(!section)return;
  const holder=document.createElement('div');holder.className='panel admin-card';holder.innerHTML=
@@ -226,6 +298,7 @@ async function initAdmin(){
     form.reset();await loadAdminSection(kind);
   }catch(err){notice(err.message);}finally{if(btn)btn.disabled=false;}
  });
+ setupSourceTools();
  setupStreamForm();
  if(token){try{currentSession=await api('/api/session');}catch{token='';sessionStorage.removeItem(sessionKey);}}
  if(!currentSession||currentSession.role==='user'){$('#admin-login').classList.remove('hidden');return;}
