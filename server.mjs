@@ -79,6 +79,11 @@ async function route(req,res) {
   if(p.startsWith('/api/admin/extra/') || /^\/api\/free\/[A-Z0-9]{2,12}\/catalog$/.test(p))
     return adminExtras({req,res,p,json,auth,apiRequest,readBody});
   if(req.method==='GET' && (p==='/'||p==='/tv'||p==='/admin')) return serveFile(res,p==='/admin'?'admin.html':'tv.html');
+  if(req.method==='GET' && p==='/hls.min.js') {
+    try{const data=await fs.readFile(path.join(root,'node_modules','hls.js','dist','hls.min.js'));
+      res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});res.end(data);
+    }catch{return json(res,503,{error:'HLS player not installed'});}return;
+  }
   if(req.method==='GET' && ['/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg'].includes(p)) return serveFile(res,p.slice(1));
   if(req.method==='POST' && p==='/api/auth/login') {
     const body=await readBody(req);
