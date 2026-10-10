@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { handleSourceAction } from './source-manager.mjs';
+import { handleSourceAction, validateEndpoint } from './source-manager.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -12,7 +12,7 @@ const apiKey = process.env.SUPABASE_PUBLISHABLE_KEY || '';
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const resources = {
   plans: { table:'akkad_plans', fields:['name','duration_days','max_devices','max_connections','kind','active'] },
-  sources: { table:'akkad_sources', fields:['name','kind','endpoint','credential_ref','license_confirmed','enabled'] },
+  sources: { table:'akkad_sources', fields:['name','kind','endpoint','credential_ref','license_confirmed','enabled','allow_insecure_http'] },
   catalog: { table:'akkad_catalog', fields:['title','kind','category','description','poster_url','tmdb_id','release_year','published','source_id'] },
   streams: { table:'akkad_streams', fields:['item_id','label','media_url','media_type','priority','enabled'] },
   subscriptions: { table:'akkad_subscriptions', fields:['user_id','plan_id','starts_at','ends_at','status'] },
@@ -125,9 +125,13 @@ async function route(req,res) {
       if(name==='sources'){
         try {
           const u=new URL(record.endpoint);
-          if(u.protocol!=='https:' || u.username || u.password || u.search || u.hash || !u.hostname.includes('.') || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname)) throw new Error('unsafe');
-          record.endpoint=u.toString().replace(/\/$/,'');
-        } catch {return json(res,400,{error:'استخدم عنوان خادم HTTPS بدون بيانات دخول أو معاملات في الرابط'});}
+          const consent=record.allow_insecure_http===true;
+          if(u.protocol==='http:' && !consent) return json(res,400,{error:'مصدر HTTP يتطلب تفعيل خيار الموافقة على اتصال غير مشفر'});
+          if(u.protocol==='http:' && process.env.AKKAD_ALLOW_HTTP_SOURCES!=='true') return json(res,400,{error:'يجب تفعيل خيار HTTP في إعدادات خادم أكّد'});
+          const clean=validateEndpoint(record.endpoint,u.hostname,{allowHttp:consent});
+          record.endpoint=clean.toString().replace(/\/$/,'');
+          record.allow_insecure_http=consent;
+        }catch{return json(res,400,{error:'عنوان المصدر غير صالح: استخدم نطاقاً أو IP عاماً مع بروتوكول HTTP/HTTPS، بدون بيانات دخول بالرابط'});}
         delete record.credential_ref;
       }
       if(name==='sources') record.enabled=false;
@@ -142,6 +146,7 @@ async function route(req,res) {
     if(req.method==='PATCH' && id){
       const body=await readBody(req);const record=allowed(body,cfg.fields);
       if(name==='sources' && record.enabled===true) return json(res,400,{error:'Enable only after source verification'});
+      if(name==='sources' && (record.endpoint!==undefined || record.allow_insecure_http!==undefined)) return json(res,400,{error:'أنشئ مصدراً جديداً عند تغيير البروتوكول أو عنوان الخادم'});
       const data=await apiRequest(base+'?id=eq.'+id,{method:'PATCH',token:a.token,body:record,extraHeaders:{Prefer:'return=representation'}});
       return json(res,200,{item:Array.isArray(data)?data[0]:data});
     }
