@@ -1,0 +1,189 @@
+import crypto from 'node:crypto';
+import net from 'node:net';
+import {lookup} from 'node:dns/promises';
+const error=(s,status=400)=>Object.assign(new Error(s),{status});
+const types=['live','movie','series'], actions={live:['get_live_categories','get_live_streams'],movie:['get_vod_categories','get_vod_streams'],series:['get_series_categories','get_series']};
+const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
+export function publicAddress(ip){
+ const t=net.isIP(ip);if(t===4){const [a,b,c]=ip.split('.').map(Number);
+ return a!==0&&a!==10&&a!==127&&a<224&&!(a===169&&b===254)&&!(a===172&&b>=16&&b<=31)&&!(a===192&&b===168)&&!(a===100&&b>=64&&b<=127)&&!(a===192&&b===0)&&!(a===198&&b>=18&&b<=19)&&!(a===198&&b===51&&c===100)&&!(a===203&&b===0&&c===113);}
+ if(t===6){const v=ip.toLowerCase();return v!=='::1'&&v!=='::'&&!/^(fc|fd|ff|fe80:|2001:db8:)/.test(v)&&!v.startsWith('::ffff:');}
+ return false;
+}
+export function validateEndpoint(value,allowlist,{query=false,host=null}={}){
+ let u;try{u=new URL(value);}catch{throw error('رابط المصدر غير صالح');}
+ const allowed=String(allowlist||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
+ if(u.protocol!=='https:'||u.username||u.password||u.hash||(!query&&u.search)||net.isIP(u.hostname)||!u.hostname.includes('.')||!allowed.includes(u.hostname.toLowerCase())||(host&&u.hostname!==host))
+  throw error('يجب استخدام خادم HTTPS مُدرج ضمن AKKAD_ALLOWED_SOURCE_HOSTS بدون بيانات دخول مكشوفة');
+ return u;
+}
+async function readRemote(url,allowed,options={}){
+ const u=validateEndpoint(url,allowed,{query:true,host:options.host||null});
+ const ips=await (options.lookup||lookup)(u.hostname,{all:true});
+ if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
+ let r;try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw error('تعذر الاتصال بالمصدر الآمن',502);}
+ if(!r.ok)throw error('المصدر أعاد HTTP '+r.status,502);
+ const max=24*1024*1024;
+ if(Number(r.headers.get('content-length')||0)>max)throw error('قائمة المصدر أكبر من الحد',413);
+ const chunks=[];let size=0;
+ for await(const c of r.body){size+=c.byteLength;if(size>max)throw error('قائمة المصدر أكبر من الحد',413);chunks.push(c);}
+ return Buffer.concat(chunks.map(x=>Buffer.from(x)),size).toString('utf8');
+}
+export function encrypt(data,key){
+ if(!/^[0-9a-f]{64}$/i.test(key||''))throw error('مفتاح تشفير المصادر غير مُهيأ',503);
+ const iv=crypto.randomBytes(12),c=crypto.createCipheriv('aes-256-gcm',Buffer.from(key,'hex'),iv);
+ const ciphertext=Buffer.concat([c.update(JSON.stringify(data),'utf8'),c.final()]);
+ return {iv:iv.toString('base64'),tag:c.getAuthTag().toString('base64'),ciphertext:ciphertext.toString('base64'),updated_at:new Date().toISOString()};
+}
+export function decrypt(row,key){
+ if(!row)throw error('أدخل بيانات اعتماد المصدر أولاً');
+ if(!/^[0-9a-f]{64}$/i.test(key||''))throw error('مفتاح تشفير المصادر غير مُهيأ',503);
+ try{const d=crypto.createDecipheriv('aes-256-gcm',Buffer.from(key,'hex'),Buffer.from(row.iv,'base64'));d.setAuthTag(Buffer.from(row.tag,'base64'));return JSON.parse(Buffer.concat([d.update(Buffer.from(row.ciphertext,'base64')),d.final()]).toString());}
+ catch{throw error('فشل فك تشفير المصدر',503);}
+}
+export function parseM3U(body,sourceId,kind='live',limit=100){
+ if(!body.trimStart().startsWith('#EXTM3U'))throw error('ملف M3U غير صحيح');
+ const items=[],totals={live:0,movie:0,series:0};let meta=null;
+ for(const line0 of body.split(/\r?\n/)){
+  const line=line0.trim();
+  if(line.startsWith('#EXTINF:')){
+   const attrs={};for(const m of line.matchAll(/([\w-]+)="([^"]*)"/g))attrs[m[1]]=m[2];
+   meta={title:attrs['tvg-name']||line.slice(line.indexOf(',')+1),group:attrs['group-title']||'عام',icon:attrs['tvg-logo'],id:attrs['tvg-id']};
+  }else if(meta&&/^https?:\/\//i.test(line)){
+   const k=/series|مسلسلات|episode/i.test(meta.group)?'series':/movie|vod|film|أفلام|سينما/i.test(meta.group)?'movie':'live';
+   totals[k]++;
+   if(k===kind&&items.length<limit){
+    const item=normalized({name:meta.title,stream_id:meta.id||digest(line),stream_icon:meta.icon},k,meta.group,sourceId);
+    if(item)items.push(item);
+   }
+   meta=null;
+  }
+ }
+ return {items,totals};
+}
+export function normalized(row,kind,category,sourceId){
+ const external_id=row?.series_id??row?.stream_id??row?.id;
+ const title=String(row?.name||row?.title||'').trim().replace(/\s+/g,' ').slice(0,240);
+ if(!title||external_id==null||String(external_id).length>160||!types.includes(kind))return null;
+ const y=String(row.year||row.releasedate||row.releaseDate||row.release_date||title.match(/\((\d{4})\)/)?.[1]||'').match(/(?:19|20)\d{2}/);
+ const year=y?Number(y[0]):null;
+ const tmdb=Number(row.tmdb_id||row.tmdb||0),tmdb_id=Number.isSafeInteger(tmdb)&&tmdb>0?tmdb:null;
+ const clean=title.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]/gu,' ').replace(/\s+/g,' ').trim();
+ const dedupe=kind!=='live'&&tmdb_id?'tmdb:'+kind+':'+tmdb_id:kind!=='live'&&year?'title:'+kind+':'+clean+':'+year:'origin:'+sourceId+':'+kind+':'+external_id;
+ const cover=String(row.cover||row.stream_icon||'');
+ return {external_id:String(external_id),title,kind,category:String(category||'عام').slice(0,100),release_year:year,tmdb_id,poster_url:cover.startsWith('https://')?cover.slice(0,2000):null,dedupe_key:digest(dedupe)};
+}
+export function xtreamOverview(result){
+ const x=result?.user_info;if(Number(x?.auth)!==1)throw error('حساب Xtream غير مصرح أو بياناته غير صحيحة',401);
+ const expires=Number(x.exp_date),max=Number(x.max_connections),active=Number(x.active_cons);
+ return {status:String(x.status||'Unknown').slice(0,30),expires_at:expires>0&&Number.isFinite(expires)?new Date(expires*1000).toISOString():null,max_connections:Number.isFinite(max)?max:null,active_connections:Number.isFinite(active)?active:null};
+}
+async function xtream(endpoint,creds,action,allowlist,options={}){
+ const base=endpoint.endsWith('/')?endpoint:endpoint+'/';
+ const url=new URL('player_api.php',base);
+ url.searchParams.set('username',creds.username);url.searchParams.set('password',creds.password);
+ if(action)url.searchParams.set('action',action);
+ const response=await readRemote(url.toString(),allowlist,{...options,host:new URL(endpoint).hostname});
+ try{return JSON.parse(response);}catch{throw error('صيغة Xtream غير صحيحة',502);}
+}
+export async function verifySource(source,credentials,allowlist,options={}){
+ validateEndpoint(source.endpoint,allowlist);
+ if(source.kind==='xtream')return xtreamOverview(await xtream(source.endpoint,credentials,null,allowlist,options));
+ if(source.kind==='m3u'){
+  const text=await readRemote(credentials.playlist_url,allowlist,{...options,host:new URL(source.endpoint).hostname});
+  return {status:'Active',counts:parseM3U(text,source.id).totals};
+ }
+ throw error('نوع المصدر لا يدعم الفحص التلقائي بعد');
+}
+export async function collectSource(source,creds,kind,limit,allowlist,options={}){
+ validateEndpoint(source.endpoint,allowlist);
+ if(source.kind==='xtream'){
+  const [catAction,listAction]=actions[kind];
+  const [cats,rows]=await Promise.all([xtream(source.endpoint,creds,catAction,allowlist,options),xtream(source.endpoint,creds,listAction,allowlist,options)]);
+  if(!Array.isArray(rows))throw error('الاستجابة لا تحتوي قائمة محتوى',502);
+  const categories=new Map((Array.isArray(cats)?cats:[]).map(x=>[String(x.category_id),String(x.category_name||'عام')]));
+  const items=[];let total=0;
+  for(const row of rows){const x=normalized(row,kind,categories.get(String(row.category_id)),source.id);if(x){total++;if(items.length<limit)items.push(x);}}
+  return {items,total,invalid:rows.length-total};
+ }
+ if(source.kind==='m3u'){
+  const text=await readRemote(creds.playlist_url,allowlist,{...options,host:new URL(source.endpoint).hostname});
+  const parsed=parseM3U(text,source.id,kind,limit);
+  return {items:parsed.items,total:parsed.totals[kind],invalid:0};
+ }
+ throw error('المصدر لا يدعم المزامنة التلقائية بعد');
+}
+export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,json}){
+ const match=/^\/api\/admin\/sources\/([0-9a-f-]{36})\/(credentials|check|sync|jobs)$/.exec(p);
+ if(!match)return false;
+ const [,id,action]=match;
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw error('معرف المصدر غير صحيح');
+ const a=await admin(req);
+ const query=(table,{method='GET',body,where='',prefer}={})=>apiRequest('/rest/v1/akkad_'+table+where,{method,token:a.token,body,extraHeaders:prefer?{Prefer:prefer}:{}});
+ const found=await query('sources',{where:'?select=*&id=eq.'+id});const source=found?.[0];
+ if(!source)throw error('المصدر غير موجود',404);
+ if(action==='jobs'&&req.method==='GET'){
+  const jobs=await query('source_sync_jobs',{where:'?select=id,kind,status,requested_limit,imported_count,skipped_count,error_summary,started_at,completed_at&source_id=eq.'+id+'&order=started_at.desc&limit=20'});
+  return json(res,200,{jobs});
+ }
+ if(req.method!=='POST')throw error('طريقة الطلب غير مدعومة',405);
+ if(!source.license_confirmed)throw error('يجب تأكيد حقوق المصدر أولاً');
+ const allowlist=process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'';
+ if(action==='credentials'){
+  validateEndpoint(source.endpoint,allowlist);
+  const b=await readBody(req);let data;
+  if(source.kind==='xtream'){
+   if(typeof b.username!=='string'||typeof b.password!=='string'||!b.username.trim()||!b.password||b.username.length>200||b.password.length>250)throw error('الاسم أو كلمة المرور غير صحيحة');
+   data={username:b.username.trim(),password:b.password};
+  }else if(source.kind==='m3u'){
+   if(typeof b.playlist_url!=='string'||b.playlist_url.length>4096)throw error('رابط M3U غير صحيح');
+   validateEndpoint(b.playlist_url,allowlist,{query:true,host:new URL(source.endpoint).hostname});
+   data={playlist_url:b.playlist_url};
+  }else throw error('الحفظ التلقائي لهذا النوع لم يُدعَم بعد');
+  const enc=encrypt(data,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
+  await query('source_credentials',{method:'POST',where:'?on_conflict=source_id',body:{source_id:id,...enc},prefer:'resolution=merge-duplicates,return=minimal'});
+  return json(res,200,{ok:true,saved:true});
+ }
+ const credentialsRecord=await query('source_credentials',{where:'?select=*&source_id=eq.'+id});
+ const credentials=decrypt(credentialsRecord?.[0],process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
+ if(action==='check'){
+  try{
+   const overview=await verifySource(source,credentials,allowlist);
+   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'ok',last_error:null,enabled:true,provider_expires_at:overview.expires_at||null,provider_max_connections:overview.max_connections??null,provider_active_connections:overview.active_connections??null}});
+   return json(res,200,{ok:true,overview});
+  }catch(e){
+   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_checked_at:new Date().toISOString(),last_check_status:'error',last_error:String(e.message).slice(0,170),enabled:false}}).catch(()=>{});
+   throw e;
+  }
+ }
+ if(action!=='sync')throw error('العملية غير معروفة',404);
+ const b=await readBody(req);const kind=b.kind,limit=Number(b.limit);
+ if(!types.includes(kind)||![10,50,100].includes(limit))throw error('حدد قسماً وعدداً 10 أو 50 أو 100');
+ if(!source.enabled||source.last_check_status!=='ok')throw error('افحص المصدر بنجاح أولاً قبل المزامنة');
+ await query('source_sync_jobs',{method:'PATCH',where:'?source_id=eq.'+id+'&kind=eq.'+kind+'&status=eq.running&started_at=lt.'+new Date(Date.now()-600000).toISOString(),body:{status:'failed',completed_at:new Date().toISOString(),error_summary:'تجاوز المهمة مهلة التنفيذ'}});
+ const running=await query('source_sync_jobs',{where:'?select=id&source_id=eq.'+id+'&kind=eq.'+kind+'&status=eq.running&limit=1'});
+ if(running.length)throw error('مزامنة أخرى جارية',409);
+ const job=await query('source_sync_jobs',{method:'POST',body:{source_id:id,kind,requested_limit:limit,status:'running'},prefer:'return=representation'});
+ try{
+  const gathered=await collectSource(source,credentials,kind,limit,allowlist);
+  const items=[...new Map(gathered.items.map(x=>[x.external_id,x])).values()];
+  if(items.length){
+   const distinct=[...new Map(items.map(x=>[x.dedupe_key,x])).values()];
+   const now=new Date().toISOString();
+   await query('catalog',{method:'POST',where:'?on_conflict=dedupe_key',body:distinct.map(x=>({title:x.title,kind:x.kind,category:x.category,poster_url:x.poster_url,release_year:x.release_year,tmdb_id:x.tmdb_id,dedupe_key:x.dedupe_key,source_id:id,last_synced_at:now,published:false})),prefer:'resolution=ignore-duplicates,return=minimal'});
+   const rows=await query('catalog',{where:'?select=id,dedupe_key&dedupe_key=in.('+distinct.map(x=>x.dedupe_key).join(',')+')&limit=200'});
+   const map=new Map(rows.map(x=>[x.dedupe_key,x.id]));
+   if(distinct.some(x=>!map.has(x.dedupe_key)))throw error('فشل ربط الكتالوج بالمصدر',502);
+   await query('source_items',{method:'POST',where:'?on_conflict=source_id,kind,external_id',body:items.map(x=>({source_id:id,catalog_id:map.get(x.dedupe_key),kind,external_id:x.external_id,category:x.category,last_seen_at:now})),prefer:'resolution=merge-duplicates,return=minimal'});
+  }
+  const countsData=await apiRequest('/rest/v1/rpc/akkad_source_counts',{method:'POST',token:a.token,body:{p_source:id}});
+  const counts=Array.isArray(countsData)?countsData[0]:countsData;
+  const now=new Date().toISOString();
+  await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_synced_at:now,last_error:null,live_count:counts?.live||0,movie_count:counts?.movie||0,series_count:counts?.series||0}});
+  await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'success',imported_count:items.length,skipped_count:gathered.invalid,completed_at:now}});
+  return json(res,200,{ok:true,imported:items.length,available:gathered.total,skipped:gathered.invalid,stored:counts,note:'تُضاف البيانات كمسودات دون نسخ أسرار وروابط تشغيل'});
+ }catch(e){
+  await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'failed',error_summary:String(e.message).slice(0,180),completed_at:new Date().toISOString()}}).catch(()=>{});
+  throw e;
+ }
+}
