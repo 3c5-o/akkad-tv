@@ -100,7 +100,8 @@ async function route(req,res) {
   if(req.method==='GET' && p==='/api/session') {
     const a=await auth(req);
     const subs=await apiRequest('/rest/v1/akkad_subscriptions?select=id,starts_at,ends_at,status,plan_id&user_id=eq.'+a.user.id+'&order=ends_at.desc&limit=5',{token:a.token});
-    return json(res,200,{id:a.user.id,email:a.user.email,role:a.role,subscriptions:subs});
+    const viewers=a.role==='user'?await apiRequest('/rest/v1/akkad_viewer_accounts?select=username,active&user_id=eq.'+a.user.id,{token:a.token}):[];
+    return json(res,200,{id:a.user.id,username:viewers?.[0]?.username||null,active:a.role==='user'?viewers?.[0]?.active===true:true,role:a.role,subscriptions:subs});
   }
   if(req.method==='GET' && (p==='/api/catalog'||p==='/api/plans')) {
     const kind=(url.searchParams.get('kind')||'').toLowerCase();
