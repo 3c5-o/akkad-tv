@@ -237,6 +237,25 @@ async function setup(){
   if(!confirm('هل تؤكد حذف المصدر «'+currentSource.name+'» وإيقاف عرض محتواه؟ لا يمكن التراجع.'))return;
   try{await api('/api/admin/extra/source/'+currentSource.id,{method:'DELETE'});currentSource=null;$('#source-editor-label').value='لم تحدد مصدراً';notice('تم حذف المزود');await refreshAll()}catch(e){notice(e.message)}
  };
+ $('#code-source-bind').onclick=async()=>{
+  if(!currentSource)return notice('اختر مزوّداً أولاً');
+  const code=$('#code-source-key').value.trim().toUpperCase();
+  if(!/^[A-Z0-9]{2,12}$/.test(code))return notice('اكتب كوداً مثل A1');
+  const result=$('#code-source-result');result.textContent='جارٍ ربط الكود بالمزود...';
+  try{
+   await api('/api/admin/extra/source/'+currentSource.id,{method:'PATCH',
+    body:JSON.stringify({free_code:code,free_enabled:true})});
+   await refreshAll();chooseSource(currentSource.id,false);
+   result.textContent='تم ربط الكود '+code+' بمزود '+currentSource.name+'. المستخدم يستطيع عرض جميع محتويات المزود المدخلة وتشغيل المحتوى المتوافق.';
+   notice('تم ربط كود المزود');
+  }catch(e){fail(e,result)}
+ };
+ $('#code-source-disable').onclick=async()=>{
+  if(!currentSource)return notice('اختر مزوّداً');
+  if(!confirm('إيقاف الكود عن هذا المزود؟'))return;
+  try{await api('/api/admin/extra/source/'+currentSource.id,{method:'PATCH',body:JSON.stringify({free_enabled:false})});
+   notice('تم تعطيل الكود');await refreshAll();chooseSource(currentSource.id,false)}catch(e){notice(e.message)}
+ };
  $('#source-check').onclick=inspectSource;
  $('#source-sync').onclick=async()=>{
   if(!currentSource)return notice('حدد مصدر IPTV');
@@ -261,14 +280,75 @@ async function setup(){
    root.innerHTML=d.results?.length?d.results.map(i=>item(i.title,(i.release_year||'')+' • TMDb '+i.tmdb_id)).join(''):empty('لا توجد نتائج')}
   catch(e){fail(e,root)}
  };
- $('#viewer-create').onclick=async()=>{
-  const output=$('#viewer-status'),username=$('#viewer-name').value,password=$('#viewer-password').value;
-  output.textContent='جارٍ إنشاء حساب المشاهد بأمان...';output.classList.remove('error');
+ $('#viewer-reload').onclick=()=>loadViewers();
+ $('#viewer-search').oninput=()=>{
+  clearTimeout(loadViewers.searchTimer);
+  loadViewers.searchTimer=setTimeout(()=>{viewerState.search=$('#viewer-search').value.trim();viewerState.offset=0;loadViewers()},300);
+ };
+ $('#viewer-prev').onclick=()=>{viewerState.offset=Math.max(0,viewerState.offset-50);loadViewers()};
+ $('#viewer-next').onclick=()=>{if(viewerState.offset+50<viewerState.total){viewerState.offset+=50;loadViewers()}};
+ $('#viewer-create-form').onsubmit=async e=>{
+  e.preventDefault();
+  const output=$('#viewer-status'),name=$('#viewer-name').value.trim(),password=$('#viewer-password').value,
+   btn=$('#viewer-create');
+  btn.disabled=true;output.textContent='جارٍ إنشاء الحساب...';output.classList.remove('error');
   try{
-   const result=await api('/api/admin/viewers',{method:'POST',body:JSON.stringify({username,password})});
-   $('#viewer-password').value='';output.textContent='تم إنشاء الحساب: '+result.username+'، ويمكن استخدامه بتطبيق المستخدم.';
-   notice('تم إنشاء حساب المشاهد');await loadViewers();
-  }catch(e){fail(e,output)}
+   const created=await api('/api/admin/viewers',{method:'POST',body:JSON.stringify({username:name,password})});
+   let msg='تم إنشاء المستخدم: '+created.username;
+   $('#viewer-password').value='';
+   if($('#viewer-activate-now').checked){
+    const days=Number($('#viewer-create-days').value),plan=$('#viewer-create-plan').value||null;
+    try{
+     const activated=await api('/api/admin/viewers/'+created.user_id+'/activate',{method:'POST',
+      body:JSON.stringify({days,plan_id:plan})});
+     msg+=' \nوتم تفعيل الاشتراك حتى '+new Date(activated.subscription.expires_at).toLocaleString('ar-IQ');
+    }catch(activationError){msg+='\nلكن لم يتفعّل الاشتراك: '+activationError.message}
+   }
+   output.textContent=msg;notice('تم إنشاء الحساب');
+   viewerState.search=name;viewerState.offset=0;$('#viewer-search').value=name;
+   await loadViewers();if(viewerState.items.length)chooseViewer(viewerState.items[0].user_id);
+  }catch(error){fail(error,output)}
+  finally{btn.disabled=false}
+ };
+ $('#viewer-save-password').onclick=async()=>{
+  if(!viewerState.selected)return notice('اختر حساباً من القائمة');
+  const password=$('#viewer-reset-password').value;
+  if(password.length<8)return notice('كلمة المرور 8 أحرف على الأقل');
+  try{await api('/api/admin/viewers/'+viewerState.selected+'/password',{method:'PATCH',body:JSON.stringify({password})});
+   $('#viewer-reset-password').value='';notice('تم تغيير كلمة المرور')}catch(e){notice(e.message)}
+ };
+ $('#viewer-delete').onclick=async()=>{
+  const chosen=viewerState.items.find(v=>v.user_id===viewerState.selected);
+  if(!chosen)return notice('اختر حساباً');
+  if(!confirm('هل تؤكد حذف حساب '+chosen.username+' نهائياً؟'))return;
+  try{await api('/api/admin/viewers/'+chosen.user_id,{method:'DELETE'});
+   viewerState.selected=null;notice('تم حذف الحساب');await loadViewers()}catch(e){notice(e.message)}
+ };
+ $('#activate-viewer').onchange=()=>{if($('#activate-viewer').value)chooseViewer($('#activate-viewer').value)};
+ $('#activate-duration').onchange=()=>{
+  const custom=$('#activate-duration').value==='custom';
+  $('#activate-custom').disabled=!custom;
+ };
+ $('#activation-direct-form').onsubmit=async e=>{
+  e.preventDefault();
+  const id=$('#activate-viewer').value;
+  if(!id)return notice('اختر مستخدماً');
+  const days=$('#activate-duration').value==='custom'?Number($('#activate-custom').value):Number($('#activate-duration').value);
+  if(!Number.isInteger(days)||days<1||days>1095)return notice('حدد مدة من يوم إلى 1095 يوماً');
+  const output=$('#activate-result');output.textContent='جارٍ تفعيل الحساب...';output.classList.remove('error');
+  try{
+   const result=await api('/api/admin/viewers/'+id+'/activate',{method:'POST',
+    body:JSON.stringify({days,plan_id:$('#activate-plan').value||null})});
+   output.textContent='تم تفعيل / تمديد الاشتراك بنجاح حتى '+new Date(result.subscription.expires_at).toLocaleString('ar-IQ')+
+    '\nمدة التمديد: '+days+' يوماً، بدون كود.';
+   notice('تم تفعيل الاشتراك');await loadViewers();
+  }catch(error){fail(error,output)}
+ };
+ $('#activate-pause').onclick=async()=>{
+  const id=$('#activate-viewer').value;if(!id)return notice('اختر مستخدماً');
+  if(!confirm('إيقاف الاشتراك الحالي للمستخدم؟'))return;
+  try{await api('/api/admin/viewers/'+id+'/subscription',{method:'PATCH',body:JSON.stringify({status:'paused'})});
+   notice('تم إيقاف الاشتراك');await loadViewers()}catch(e){notice(e.message)}
  };
  $('#viewer-records').innerHTML=empty('افتح قسم المشاهدين لعرض الحسابات الحالية.');
  $('#admin-login-form').onsubmit=async e=>{
