@@ -6,7 +6,7 @@ const types=['live','movie','series'], actions={live:['get_live_categories','get
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
 export function publicAddress(ip){
  const t=net.isIP(ip);if(t===4){const [a,b,c]=ip.split('.').map(Number);
- return a!==0&&a!==10&&a!==127&&a<224&&!(a===169&&b===254)&&!(a===172&&b>=16&&b<=31)&&!(a===192&&b===168)&&!(a===100&&b>=64&&b<=127)&&!(a===192&&b===0)&&!(a===198&&b>=18&&b<=19)&&!(a===198&&b===51&&c===100)&&!(a===203&&b===0&&c===113);}
+ return a!==0&&a!==10&&a!==127&&a<224&&!(a===169&&b===254)&&!(a===172&&b>=16&&b<=31)&&!(a===192&&b===168)&&!(a===100&&b>=64&&b<=127)&&!(a===192&&b===0)&&!(a===192&&b===0&&c===2)&&!(a===198&&b>=18&&b<=19)&&!(a===198&&b===51&&c===100)&&!(a===203&&b===0&&c===113);}
  if(t===6){const v=ip.toLowerCase();return v!=='::1'&&v!=='::'&&!/^(fc|fd|ff|fe80:|2001:db8:)/.test(v)&&!v.startsWith('::ffff:');}
  return false;
 }
@@ -76,6 +76,9 @@ export function normalized(row,kind,category,sourceId){
 export function xtreamOverview(result){
  const x=result?.user_info;if(Number(x?.auth)!==1)throw error('حساب Xtream غير مصرح أو بياناته غير صحيحة',401);
  const expires=Number(x.exp_date),max=Number(x.max_connections),active=Number(x.active_cons);
+ const status=String(x.status||'').toLowerCase();
+ if(status!=='active'&&status!=='trial')throw error('حساب Xtream متوقف أو منتهي الصلاحية',403);
+ if(Number.isFinite(expires)&&expires>0&&expires*1000<=Date.now())throw error('انتهت صلاحية حساب Xtream',403);
  return {status:String(x.status||'Unknown').slice(0,30),expires_at:expires>0&&Number.isFinite(expires)?new Date(expires*1000).toISOString():null,max_connections:Number.isFinite(max)?max:null,active_connections:Number.isFinite(active)?active:null};
 }
 async function xtream(endpoint,creds,action,allowlist,options={}){
