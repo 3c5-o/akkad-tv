@@ -11,6 +11,7 @@ let currentSession=null;
 let freeSourceCode=sessionStorage.getItem('akkad_free_source')||'';
 let currentHls=null;
 let catalog=[];
+let playbackRequest=0,catalogRequest=0;
 const records={};
 function notice(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.classList.remove('show'),4700);}
 function h(text){return String(text??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -64,8 +65,10 @@ async function login(form){
   currentSession=await api('/api/session');
   return data;
 }
-function logout(){hideWatch();freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');notice('تم تسجيل الخروج');}
+function logout(){hideWatch();catalogRequest++;catalog=[];if(mode==='tv'){['live','movie','series','anime'].forEach(k=>renderCatalog(k));$('#tv-featured').replaceChildren();}freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');if(mode==='tv')refreshUser();notice('تم تسجيل الخروج');}
 function openTv(section){
+  if(!$('[data-tv-section="'+section+'"]'))return;
+  document.body.dataset.section=section;hideWatch();
   $$('.tv-section').forEach(el=>el.classList.toggle('active',el.dataset.tvSection===section));
   $$('[data-tv-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tvTab===section));
   if(['movie','series','anime','live'].includes(section))renderCatalog(section);
@@ -102,8 +105,9 @@ function renderCatalog(kind,category='الكل'){
  $$('#grid-'+kind+' [data-play]').forEach(el=>el.onclick=()=>playItem(el.dataset.play));
 }
 function hideWatch(){
+ playbackRequest++; 
  if(currentHls){currentHls.destroy();currentHls=null}
- const el=$('#watch-video');if(el){const video=el.querySelector('video');video?.pause();el.replaceChildren()}
+ const el=$('#watch-video');if(el){const video=el.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}el.replaceChildren()}
  $('#tv-watch-modal')?.classList.add('hidden');
 }
 function displayWatch(title,message=''){
@@ -115,10 +119,13 @@ function displayWatch(title,message=''){
 function setWatchStatus(status){$('#watch-message').textContent=status;}
 async function startVideo(url,format){
  if(currentHls){currentHls.destroy();currentHls=null}
- const element=$('#watch-video');element.replaceChildren();
+ const element=$('#watch-video');
+ const oldVideo=element.querySelector('video');if(oldVideo){oldVideo.pause();oldVideo.removeAttribute('src');oldVideo.load();}element.replaceChildren();
  const video=document.createElement('video');video.controls=true;video.playsInline=true;video.autoplay=true;
  video.preload='metadata';video.setAttribute('aria-label','مشغل أكّد');
  element.append(video);
+ video.addEventListener('playing',()=>setWatchStatus('يتم التشغيل الآن'));
+ video.addEventListener('waiting',()=>setWatchStatus('جارٍ تحميل الفيديو…'));
  video.addEventListener('error',()=>setWatchStatus('فشل تشغيل الفيديو. قد لا يدعم المتصفح هذه الصيغة أو يكون رابط المزود متوقفاً.'));
  if(format==='hls'&&window.Hls?.isSupported()){
   currentHls=new window.Hls({enableWorker:false,maxBufferLength:30,liveSyncDurationCount:3});
@@ -138,11 +145,13 @@ async function playItem(id){
  const item=catalog.find(x=>x.id===id);
  if(!item)return notice('المحتوى غير موجود في القائمة');
  if(!token&&!freeSourceCode){$('#tv-login')?.classList.remove('hidden');return notice('سجّل الدخول أو أدخل كود المصدر');}
+ hideWatch();const request=++playbackRequest;
  displayWatch(item.title,'جارٍ تحميل بيانات التشغيل من المصدر...');
  try{
   const route=freeSourceCode?'/api/free/'+encodeURIComponent(freeSourceCode):'/api';
   if(item.kind==='series'){
     const result=await api(route+'/episodes/'+encodeURIComponent(id));
+    if(request!==playbackRequest)return;
     const root=$('#watch-episodes');root.classList.remove('hidden');
     const seasons=result.seasons||[];
     let episodes=0;
@@ -157,21 +166,24 @@ async function playItem(id){
     setWatchStatus(episodes?'اختر حلقة لبدء المشاهدة. عدد الحلقات: '+episodes:'لا توجد حلقات متاحة من حساب Xtream');
   }else{
     const result=await api(route+'/watch/'+encodeURIComponent(id));
+    if(request!==playbackRequest)return;
     setWatchStatus('المصدر: '+result.label+' • '+(result.format==='hls'?'HLS':result.format?.toUpperCase()||'تلقائي'));
     await startVideo(result.url,result.format);
   }
- }catch(e){setWatchStatus('تعذر التشغيل: '+e.message);notice(e.message)}
+ }catch(e){if(request!==playbackRequest)return;setWatchStatus('تعذر التشغيل: '+e.message);notice(e.message)}
 }
 
 async function loadCatalog(){
+ const request=++catalogRequest;
  if(!token&&!freeSourceCode){catalog=[];$('#tv-featured').innerHTML=messageBox('سجّل الدخول بحساب أنشأته الإدارة، أو أدخل كود مصدر مجاني لعرض المحتوى المتاح.');return;}
  try{
   const data=freeSourceCode?await api('/api/free/'+encodeURIComponent(freeSourceCode)+'/catalog'):await api('/api/catalog');
+  if(request!==catalogRequest)return;
   catalog=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);
   $('#tv-featured').innerHTML=catalog.length?catalog.slice(0,5).map(cardHtml).join(''):messageBox('مكتبة أكّد قيد التجهيز. المحتوى هنا حقيقي ويتزامن مع لوحة الإدارة.');
   $$('#tv-featured [data-play]').forEach(el=>el.onclick=()=>playItem(el.dataset.play));
   ['live','movie','series','anime'].forEach(k=>renderCatalog(k));
- }catch(e){notice('تعذّر جلب المكتبة: '+e.message);$('#tv-featured').innerHTML=messageBox('الخادم غير مهيأ أو مكتبة المحتوى غير متاحة');}
+ }catch(e){if(request!==catalogRequest)return;notice('تعذّر جلب المكتبة: '+e.message);$('#tv-featured').innerHTML=messageBox('الخادم غير مهيأ أو مكتبة المحتوى غير متاحة');}
 }
 function refreshUser(){
  const t=$('#account-status'),p=$('#playlist-account');
@@ -181,16 +193,20 @@ function refreshUser(){
  if(t)t.textContent=status;if(p)p.textContent=(currentSession.username||'المشاهد')+' — '+status;
 }
 async function initTv(){
+ document.body.dataset.section='home';
+ $('#tv-back').onclick=()=>openTv('home');
+ window.addEventListener('offline',()=>notice('انقطع اتصال الإنترنت'));
+ window.addEventListener('online',()=>{notice('عاد اتصال الإنترنت');loadCatalog();});
  $('#watch-close').onclick=hideWatch;
  $('#watch-fullscreen').onclick=()=>{
   const video=$('#watch-video video');if(video?.requestFullscreen)video.requestFullscreen();else $('#tv-watch-modal').requestFullscreen?.();
  };
- document.addEventListener('keydown',e=>{if(e.key==='Escape')hideWatch()});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#tv-watch-modal').classList.contains('hidden'))hideWatch();else openTv('home');}});
 
  $('#tv-use-free').onchange=()=>{
   const free=$('#tv-use-free').checked;
   $('#tv-free-entry').classList.toggle('hidden',!free);
-  $('[name=username], [name=password]', $('#tv-login-form')).forEach(x=>x.required=!free);
+  $$('[name=username], [name=password]', $('#tv-login-form')).forEach(x=>x.required=!free);
   $('button[type=submit]',$('#tv-login-form')).textContent=free?'فتح المصدر المجاني':'دخول إلى أكّد';
  };
 
@@ -204,7 +220,7 @@ async function initTv(){
       if(!/^[A-Z0-9]{2,12}$/.test(code))throw new Error('أدخل كود المصدر مثل A1');
       const data=await api('/api/free/'+code+'/catalog');
       freeSourceCode=code;sessionStorage.setItem('akkad_free_source',code);catalog=Array.isArray(data.items)?data.items:[];
-      token='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);
+      token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);
       $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
       notice('تم فتح المصدر المجاني: '+data.source.name);
     }else{
@@ -219,7 +235,7 @@ async function initTv(){
  $('#setting-subtitles').onclick=()=>notice('الترجمة تعتمد على مسارات الفيديو');
  $('#setting-player').onclick=()=>notice('مشغل HTML5 الحالي؛ مشغل Media3 مخصص لتطبيق Android');
  $('#live-fullscreen').onclick=()=>$('#live-player video')?.requestFullscreen?.();
- await new Promise(r=>setTimeout(r,900));$('#splash').classList.add('hidden');
+ await new Promise(r=>setTimeout(r,2200));$('#splash').classList.add('hidden');
  if(token){try{currentSession=await api('/api/session');}catch{token='';sessionStorage.removeItem(sessionKey);}}
  refreshUser();if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else $('#tv-login').classList.add('hidden');
  await loadCatalog();
