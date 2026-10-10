@@ -241,7 +241,7 @@ function fillSourceSelector(){
    const opt=document.createElement('option');opt.value=source.id;opt.textContent=source.name+' ('+source.kind+')';select.append(opt);
  }
  if(old&&Array.from(select.options).some(o=>o.value===old))select.value=old;
- else if(select.options.length===2)select.selectedIndex=1;
+ else if(select.options.length>1)select.selectedIndex=1;
  select.dispatchEvent(new Event('change'));
 }
 function setupSourceTools(){
@@ -267,13 +267,13 @@ function setupSourceTools(){
      if(action==='credentials'){
        $('#source-password').value='';
        $('#source-m3u-url').value='';
-       result.textContent='تم حفظ بيانات اعتماد الحساب في قاعدة البيانات بصورة مشفّرة. اضغط فحص المصدر.';
+       result.textContent='نجح الفحص الحقيقي وتم حفظ بيانات الحساب مشفّرة. الحساب: '+(response.overview?.status||'نشط')+' • الصلاحية: '+(response.overview?.expires_at?new Date(response.overview.expires_at).toLocaleDateString('ar-IQ'):'غير محددة')+' • القنوات: '+(response.overview?.counts?.live??'لم تُقرأ')+' • الأفلام: '+(response.overview?.counts?.movie??'لم تُقرأ')+' • المسلسلات: '+(response.overview?.counts?.series??'لم تُقرأ');
      }else if(action==='check'){
        const data=response.overview||{};
        result.textContent='اتصال المصدر: '+(data.status||'ناجح')+
          (data.expires_at?' • الصلاحية: '+new Date(data.expires_at).toLocaleDateString('ar-IQ'):'')+
          (data.max_connections!=null?' • حد الاتصالات: '+data.max_connections:'')+
-         (data.counts?' • عدد القنوات: '+data.counts.live+' • الأفلام: '+data.counts.movie+' • المسلسلات: '+data.counts.series:'');
+         (data.counts?' • عدد القنوات: '+(data.counts.live??'لم تُقرأ')+' • الأفلام: '+(data.counts.movie??'لم تُقرأ')+' • المسلسلات: '+(data.counts.series??'لم تُقرأ'):'')+(data.warnings?.length?'\nملاحظات: '+data.warnings.join('؛ '):'');
      }else if(action==='sync'){
        result.textContent=(response.complete?'اكتملت مزامنة هذا القسم':'نجحت مزامنة '+(body.kind||''))+' • تم تسجيل '+response.imported+' عنصر • المصدر يحتوي '+response.available+
          ' • موضع الدفعة التالية: '+(response.next_offset??0)+' • المزيد: '+(response.has_more?'نعم':'لا')+' • المتجاوز: '+(response.skipped||0)+
@@ -284,10 +284,12 @@ function setupSourceTools(){
      }
      if(action==='sync')$('#source-sync-reset').checked=false;
      notice('اكتمل الطلب');
-     if(['check','sync'].includes(action)){
+     if(['check','credentials','sync'].includes(action)){
+       const detail=result.textContent;
        await loadAdminSection('sources');
        if(action==='sync')await loadAdminSection('catalog');
        select.value=source.id;change();
+       result.textContent=detail;
      }
    }catch(err){result.textContent='تعذر إكمال '+action+': '+err.message;notice(err.message);}
    finally{buttons.forEach(b=>b.disabled=false);}
@@ -298,7 +300,13 @@ function setupSourceTools(){
    else if(source.kind==='m3u')run(null,'credentials',{playlist_url:$('#source-m3u-url').value});
    else notice('نوع المصدر غير مدعوم لهذه الخطوة');
  };
- $('#source-check').onclick=()=>run(null,'check');
+ $('#source-check').onclick=()=>{
+   const s=selected();if(!s){notice('حدد المصدر أولاً');return;}
+   const fresh=s.kind==='xtream'?($('#source-username').value||$('#source-password').value?{
+      username:$('#source-username').value,password:$('#source-password').value
+    }:undefined):($('#source-m3u-url').value?{playlist_url:$('#source-m3u-url').value}:undefined);
+   run(null,'check',fresh);
+ };
  $('#source-jobs').onclick=()=>run(null,'jobs');
  $('#source-sync').onclick=()=>run(null,'sync',{kind:$('#source-sync-kind').value,limit:Number($('#source-sync-limit').value),reset:$('#source-sync-reset').checked});
 }
