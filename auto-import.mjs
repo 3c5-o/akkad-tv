@@ -63,7 +63,7 @@ export function startAutoImport({url,publishableKey}){
     const map=new Map(catalog.map(x=>[x.dedupe_key,x.id]));
     const linked=prepared.filter(x=>map.has(x.dedupe_key)).map(x=>({
       source_id:source.id,catalog_id:map.get(x.dedupe_key),kind:x.kind,category:x.category,
-      external_id:x.external_id,last_seen_at:now
+      external_id:x.external_id,container_extension:x.container_extension,last_seen_at:now
     }));
     if(linked.length){
       const response=await fetch(url+'/rest/v1/akkad_source_items?on_conflict=source_id,kind,external_id',{
