@@ -36,6 +36,7 @@ function switchTo(view){
  const title={overview:'لوحة التحكم',sources:'مزودو IPTV',catalog:'مكتبة المحتوى',users:'حسابات المشاهدين',plans:'الاشتراكات والباقات',codes:'أكواد VIP',tmdb:'TMDb والمعلومات',settings:'النظام والإعدادات'};
  $('#ctrl-title').textContent=title[view]||title.overview;
  if(view==='tmdb')loadTmdb().catch(e=>notice(e.message));
+ if(view==='users')loadViewers().catch(e=>notice(e.message));
  if(view==='settings')loadStatus().catch(e=>notice(e.message));
  window.scrollTo({top:0,behavior:'instant'});
 }
@@ -124,6 +125,23 @@ function renderPlans(){
 function renderCodes(){
  $('#activation-records').innerHTML=resources.activations.length?resources.activations.map(x=>item(x.note||'كود VIP',x.used_at?'مستخدم':'غير مستخدم'+' • '+new Date(x.created_at).toLocaleDateString('ar-IQ'))).join(''):empty('لا توجد أكواد');
 }
+async function loadViewers(){
+ const root=$('#viewer-records');
+ try{
+  const list=await api('/api/admin/viewers');
+  root.innerHTML=list.length?list.map(v=>item(v.username,v.active?'نشط':'متوقف',
+   '<div class="ctrl-item-actions"><button class="btn small" data-viewer-state="'+safe(v.user_id)+'">'+(v.active?'إيقاف':'تفعيل')+'</button><button class="btn small danger" data-viewer-delete="'+safe(v.user_id)+'">حذف</button></div>')).join(''):empty('لم تُنشأ حسابات مستخدمين بعد.');
+  $('[data-viewer-state]').forEach(b=>b.onclick=async()=>{
+   const entry=list.find(v=>v.user_id===b.dataset.viewerState);
+   try{await api('/api/admin/viewers/'+entry.user_id,{method:'PATCH',body:JSON.stringify({active:!entry.active})});notice('تم تعديل الحساب');await loadViewers()}catch(e){notice(e.message)}
+  });
+  $('[data-viewer-delete]').forEach(b=>b.onclick=async()=>{
+   if(!confirm('حذف هذا الحساب نهائياً؟'))return;
+   try{await api('/api/admin/viewers/'+b.dataset.viewerDelete,{method:'DELETE'});notice('تم حذف الحساب');await loadViewers()}catch(e){notice(e.message)}
+  });
+ }catch(e){root.innerHTML=empty('تعذّر جلب الحسابات: '+e.message)}
+}
+
 async function loadTmdb(){
  try{const v=await api('/api/admin/extra/tmdb');$('#tmdb-status').textContent=v.configured?'TMDb مربوط ومفتاحه مخزّن مشفّراً.':'أضف مفتاح TMDb أولاً.';$('#tmdb-status').classList.remove('error')}
  catch(e){fail(e,$('#tmdb-status'))}
@@ -196,8 +214,16 @@ async function setup(){
    root.innerHTML=d.results?.length?d.results.map(i=>item(i.title,(i.release_year||'')+' • TMDb '+i.tmdb_id)).join(''):empty('لا توجد نتائج')}
   catch(e){fail(e,root)}
  };
- $('#viewer-create').onclick=()=>{$('#viewer-status').textContent='إنشاء المستخدم يحتاج تكامل Supabase Admin API بالمفتاح الخادمي؛ حالياً غير مفعّل. لا نُنشئ مستخدماً تجريبياً.';notice('وظيفة حسابات المستخدمين تحتاج الإعداد الآمن')};
- $('#viewer-records').innerHTML=empty('سيتم عرض الحسابات الإدارية المنشأة هنا بعد تفعيل إدارة المستخدمين.');
+ $('#viewer-create').onclick=async()=>{
+  const output=$('#viewer-status'),username=$('#viewer-name').value,password=$('#viewer-password').value;
+  output.textContent='جارٍ إنشاء حساب المشاهد بأمان...';output.classList.remove('error');
+  try{
+   const result=await api('/api/admin/viewers',{method:'POST',body:JSON.stringify({username,password})});
+   $('#viewer-password').value='';output.textContent='تم إنشاء الحساب: '+result.username+'، ويمكن استخدامه بتطبيق المستخدم.';
+   notice('تم إنشاء حساب المشاهد');await loadViewers();
+  }catch(e){fail(e,output)}
+ };
+ $('#viewer-records').innerHTML=empty('افتح قسم المشاهدين لعرض الحسابات الحالية.');
  $('#admin-login-form').onsubmit=async e=>{
   e.preventDefault();const button=$('button',e.target);button.disabled=true;
   try{
