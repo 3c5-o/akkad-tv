@@ -99,3 +99,49 @@ test('Xtream expired accounts cannot be marked as healthy',()=>{
  assert.throws(()=>xtreamOverview({user_info:{auth:1,status:'Expired',exp_date:'1700000000'}}));
  assert.throws(()=>xtreamOverview({user_info:{auth:1,status:'Active',exp_date:'1700000000'}}));
 });
+
+
+test('HTTP Xtream hosts require explicit opt-in and exact host allowlisting',()=>{
+ assert.throws(()=>validateEndpoint('http://iptv.example.com:8080','iptv.example.com'));
+ assert.equal(validateEndpoint('http://iptv.example.com:8080','iptv.example.com',{allowHttp:true}).protocol,'http:');
+ assert.equal(validateEndpoint('http://8.8.8.8:8080','8.8.8.8',{allowHttp:true}).hostname,'8.8.8.8');
+ for(const unsafe of ['http://127.0.0.1:8080','http://10.0.0.2','http://192.168.1.9','http://169.254.169.254','http://localhost','http://evil.example.com','ftp://iptv.example.com']){
+   assert.throws(()=>validateEndpoint(unsafe,'iptv.example.com,127.0.0.1,10.0.0.2,192.168.1.9,169.254.169.254,localhost',{allowHttp:true}),unsafe);
+ }
+ assert.throws(()=>validateEndpoint('http://iptv.example.com/get.php?username=test','iptv.example.com',{allowHttp:true}));
+ assert.throws(()=>validateEndpoint('http://iptv.example.com@evil.example.com','evil.example.com',{allowHttp:true}));
+});
+test('HTTP Xtream check and sync only work with transport opt-in and public DNS',async()=>{
+ const source={id:sourceId,kind:'xtream',endpoint:'http://iptv.example.com:8080'};
+ let fetched=0;
+ const options={allowHttp:true,lookup:async()=>[{address:'8.8.8.8'}],fetch:async u=>{
+   fetched++;
+   assert.equal(new URL(u).protocol,'http:');
+   const kind=new URL(u).searchParams.get('action');
+   const data=kind==='get_vod_categories'?[{category_id:9,category_name:'مرخص'}]:
+     kind==='get_vod_streams'?[{stream_id:1,name:'فيلم تجريبي (2026)',category_id:9}]:
+     {user_info:{auth:1,status:'Active',max_connections:'2',active_cons:'0'}};
+   return new Response(JSON.stringify(data),{status:200});
+ }};
+ await assert.rejects(()=>verifySource(source,{username:'test',password:'secret'},'iptv.example.com',{...options,allowHttp:false}));
+ assert.equal(fetched,0);
+ const overview=await verifySource(source,{username:'test',password:'secret'},'iptv.example.com',options);
+ assert.equal(overview.max_connections,2);
+ const items=await collectSource(source,{username:'test',password:'secret'},'movie',10,'iptv.example.com',options);
+ assert.equal(items.items[0].category,'مرخص');
+ assert.equal(items.total,1);
+ assert.equal(fetched,3);
+});
+test('HTTP M3U index uses approved same-host public endpoint',async()=>{
+ const source={id:sourceId,kind:'m3u',endpoint:'http://iptv.example.com:8080'};
+ const credentials={playlist_url:'http://iptv.example.com:8080/get.php?token=secret'};
+ const fake={allowHttp:true,lookup:async()=>[{address:'8.8.8.8'}],fetch:async u=>{
+   assert.equal(new URL(u).protocol,'http:');
+   return new Response('#EXTM3U\n#EXTINF:-1 group-title="أفلام" tvg-name="فيلم",فيلم\nhttp://iptv.example.com:8080/vod?id=1&token=secret\n',{status:200});
+ }};
+ const meta=await verifySource(source,credentials,'iptv.example.com',fake);
+ assert.equal(meta.status,'Active');
+ const data=await collectSource(source,credentials,'movie',10,'iptv.example.com',fake);
+ assert.equal(data.items.length,1);
+ assert.ok(!JSON.stringify(data).includes('token=secret'));
+});
