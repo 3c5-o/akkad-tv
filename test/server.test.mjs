@@ -29,6 +29,15 @@ test('local health and portrait/landscape routes', async () => {
     const verified=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/verified-create',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
     assert.equal(verified.status,401);
     assert.match(await adminClone(port),/source-preflight/);
+    const controlStyle=await fetch('http://127.0.0.1:'+port+'/control.css');
+    const controlScript=await fetch('http://127.0.0.1:'+port+'/control.js');
+    assert.equal(controlStyle.status,200);
+    assert.equal(controlScript.status,200);
+    assert.match(await controlScript.text(),/source-create-form/);
+    const unauthorized=await fetch('http://127.0.0.1:'+port+'/api/admin/extra/tmdb');
+    assert.equal(unauthorized.status,401);
+    const unauthorizedViewer=await fetch('http://127.0.0.1:'+port+'/api/admin/viewers');
+    assert.equal(unauthorizedViewer.status,401);
   } finally {child.kill();}
 });
 
