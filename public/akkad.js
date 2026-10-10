@@ -121,6 +121,7 @@ async function playItem(id){
  }catch(err){notice(err.message);}
 }
 async function loadCatalog(){
+ if(!token&&!freeSourceCode){catalog=[];$('#tv-featured').innerHTML=messageBox('سجّل الدخول بحساب أنشأته الإدارة، أو أدخل كود مصدر مجاني لعرض المحتوى المتاح.');return;}
  try{
   const data=freeSourceCode?await api('/api/free/'+encodeURIComponent(freeSourceCode)+'/catalog'):await api('/api/catalog');
   catalog=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);
