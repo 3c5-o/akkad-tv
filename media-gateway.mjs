@@ -55,7 +55,7 @@ export function xtreamMediaUrl(source,creds,identity,format){
  const base=new URL(source.endpoint.endsWith('/')?source.endpoint:source.endpoint+'/');
  if(!numeric.test(String(identity.x))||source.kind!=='xtream')error('محتوى غير مدعوم من هذا المصدر',422);
  const ext=identity.k==='live'?(format==='ts'?'ts':'m3u8'):
-  identity.k==='episode'?String(identity.ext||'mp4').toLowerCase():'mp4';
+  String(identity.ext||'mp4').toLowerCase();
  if(!['m3u8','ts','mp4','mkv','avi'].includes(ext))error('صيغة فيديو غير مدعومة',422);
  const dir=identity.k==='live'?'live':identity.k==='episode'?'series':'movie';
  if(typeof creds.username!=='string'||typeof creds.password!=='string'||!creds.username||!creds.password)error('بيانات الحساب غير مكتملة',503);
@@ -119,11 +119,11 @@ export async function handleMedia({req,res,p,url,auth,apiRequest,json}){
   if(!uuid.test(item))error('معرف محتوى غير صالح');
   let info;
   if(maybeFree){
-    const reply=await apiRequest('/rest/v1/rpc/akkad_free_item',{method:'POST',body:{p_code:maybeFree[1],p_item:item}});
+    const reply=await apiRequest('/rest/v1/rpc/akkad_free_item_v2',{method:'POST',body:{p_code:maybeFree[1],p_item:item}});
     info=reply?.[0];
   }else{
     const user=await auth(req);
-    const reply=await apiRequest('/rest/v1/rpc/akkad_member_item',{method:'POST',token:user.token,body:{p_item:item}});
+    const reply=await apiRequest('/rest/v1/rpc/akkad_member_item_v2',{method:'POST',token:user.token,body:{p_item:item}});
     info=reply?.[0];
   }
   if(!info)error('المحتوى غير متاح للحساب أو الكود',403);
@@ -153,6 +153,7 @@ export async function handleMedia({req,res,p,url,auth,apiRequest,json}){
     episodes:(Array.isArray(items)?items:[]).slice(0,150).filter(ep=>numeric.test(String(ep.id))).map(ep=>({
      id:String(ep.id),title:String(ep.title||'الحلقة '+(ep.episode_num||'')).slice(0,180),
      episode_num:Number(ep.episode_num)||0,
+     format:['mp4','mkv','ts','m3u8','avi'].includes(ep.container_extension)?ep.container_extension:'mp4',
      url:'/api/media/'+issueTicket({source_id:source.id,media_id:item,kind:'episode',
         external_id:String(ep.id),extension:['mp4','mkv','ts','m3u8','avi'].includes(ep.container_extension)?ep.container_extension:'mp4'})
     }))
@@ -161,8 +162,8 @@ export async function handleMedia({req,res,p,url,auth,apiRequest,json}){
   }
   if(info.kind==='series')error('اختر حلقة من قائمة المسلسل أولاً',400);
   const type=info.kind==='live'?'live':'movie';
-  const format=type==='live'&&url.searchParams.get('format')==='ts'?'ts':type==='live'?'hls':'mp4';
-  const ticket=issueTicket({source_id:source.id,media_id:item,kind:type,external_id:info.external_id});
+  const format=type==='live'&&url.searchParams.get('format')==='ts'?'ts':type==='live'?'hls':(info.container_extension==='m3u8'?'hls':info.container_extension||'mp4');
+  const ticket=issueTicket({source_id:source.id,media_id:item,kind:type,external_id:info.external_id,extension:info.container_extension||null});
   return json(res,200,{url:'/api/media/'+ticket+(format==='ts'?'?format=ts':''),format,
    label:source.name,expires_in:3600});
  }
