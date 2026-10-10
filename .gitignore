@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.log
+dist/
+build/
+.DS_Store

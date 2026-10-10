@@ -1,0 +1,73 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#0b1017"/><title>أكّد | الإدارة</title><link rel="icon" href="/brand.svg"/><link rel="stylesheet" href="/akkad.css"/></head>
+<body data-app="admin"><div class="page-bg"></div>
+<div id="admin-login" class="login-shade hidden"><div class="login-card"><div class="logo"><img src="/brand.svg" alt="شعار أكّد"/>أكّد</div>
+  <h2>لوحة إدارة أكّد</h2><p class="muted small">دخول المدير الأساسي والمخولين فقط</p>
+  <form id="admin-login-form"><div class="field"><label>البريد الإلكتروني</label><input class="input" name="email" type="email" required autocomplete="username" placeholder="البريد الإلكتروني"/></div>
+  <div class="field"><label>كلمة المرور</label><input class="input" name="password" type="password" required autocomplete="current-password" placeholder="كلمة المرور"/></div>
+  <button class="btn primary" type="submit">دخول الإدارة</button></form>
+  <p class="note tiny">لا تكفي معرفة البريد للدخول؛ تُفحص جلسة Supabase وصلاحيات المدير على الخادم.</p>
+</div></div>
+<main class="admin-page">
+  <header class="admin-header"><div><div class="logo"><img src="/brand.svg" alt=""/>أكّد</div><p class="muted small" style="margin:0">الإدارة والتحكم المركزي</p></div><button class="btn small ghost" id="admin-logout">تسجيل الخروج</button></header>
+  <nav class="admin-nav" aria-label="أقسام الإدارة">
+    <button class="admin-tab active" data-admin-tab="overview">الرئيسية</button><button class="admin-tab" data-admin-tab="sources">المصادر</button>
+    <button class="admin-tab" data-admin-tab="catalog">المحتوى</button><button class="admin-tab" data-admin-tab="activations">أكواد VIP</button>
+    <button class="admin-tab" data-admin-tab="plans">الباقات</button><button class="admin-tab" data-admin-tab="subscriptions">الاشتراكات</button>
+    <button class="admin-tab" data-admin-tab="settings">النظام</button>
+  </nav>
+  <section class="admin-section active" data-admin-section="overview"><h1 class="admin-headline">لوحة التحكم</h1><p class="note">إحصائيات حقيقية من قاعدة بيانات أكّد</p>
+    <div class="admin-grid"><div class="panel admin-stat"><span>مصادر IPTV</span><strong id="stat-sources">—</strong></div><div class="panel admin-stat"><span>المحتوى</span><strong id="stat-catalog">—</strong></div>
+    <div class="panel admin-stat"><span>الباقات</span><strong id="stat-plans">—</strong></div><div class="panel admin-stat"><span>أكواد التفعيل</span><strong id="stat-activations">—</strong></div>
+    <div class="panel admin-stat"><span>الاشتراكات</span><strong id="stat-subscriptions">—</strong></div><div class="panel admin-stat"><span>المستخدم الحالي</span><strong style="font-size:1rem" id="stat-role">—</strong></div></div>
+    <div class="panel admin-card" style="margin-top:16px"><h3>حالة النظام</h3><div id="admin-health" class="note">جارٍ فحص API...</div><p class="note">تخزن بيانات الاعتماد الحساسة لخوادم المصادر داخل إعدادات Railway فقط، ولا توضع في المستودع العام.</p></div>
+  </section>
+  <section class="admin-section" data-admin-section="sources"><h1 class="admin-headline">مصادر IPTV</h1><p class="note">إضافة مصادر مصرح بإعادة توزيعها، وتظل معطلة حتى استكمال فحص الاتصال والتشغيل.</p>
+    <div class="panel admin-card"><h3>إضافة مصدر</h3><form class="form-grid" data-create="sources">
+      <div class="field"><label>اسم المصدر</label><input class="input" name="name" required placeholder="المصدر الأول"/></div>
+      <div class="field"><label>نوع المصدر</label><select class="select" name="kind"><option value="xtream">Xtream</option><option value="m3u">M3U</option><option value="hls">HLS</option><option value="direct">مباشر</option></select></div>
+      <div class="field"><label>رابط خادم المصدر (بدون كلمة مرور)</label><input class="input" name="endpoint" type="url" required placeholder="https://provider.example"/></div>
+      <div class="field"><label>مرجع سر الخادم (اختياري)</label><input class="input" name="credential_ref" placeholder="SOURCE_1"/></div>
+      <label class="field" style="display:flex;align-items:center;flex-direction:row"><input type="checkbox" name="license_confirmed" required/> أؤكد امتلاك حقوق إعادة التوزيع لهذا المصدر</label>
+      <div class="form-actions"><button class="btn primary">حفظ المصدر معطّلاً</button></div></form></div>
+    <div class="admin-list" data-records="sources"></div>
+  </section>
+  <section class="admin-section" data-admin-section="catalog"><h1 class="admin-headline">المحتوى والتصنيفات</h1><p class="note">إضافة أفلام ومسلسلات وقنوات للكتالوج. النشر لا يفعّل رابط بث تلقائياً.</p>
+    <div class="panel admin-card"><h3>إضافة محتوى</h3><form class="form-grid" data-create="catalog">
+      <div class="field"><label>العنوان</label><input class="input" name="title" required/></div>
+      <div class="field"><label>القسم</label><select name="kind" class="select"><option value="movie">فيلم</option><option value="series">مسلسل</option><option value="live">قناة</option><option value="anime">أنمي</option></select></div>
+      <div class="field"><label>التصنيف</label><input class="input" name="category" value="عام"/></div>
+      <div class="field"><label>رابط البوستر HTTPS</label><input class="input" type="url" name="poster_url"/></div>
+      <div class="field"><label>TMDb ID (اختياري)</label><input class="input" type="number" name="tmdb_id"/></div>
+      <div class="field"><label>سنة الإنتاج</label><input class="input" type="number" name="release_year"/></div>
+      <div class="field" style="grid-column:1/-1"><label>الوصف</label><textarea class="textarea" name="description"></textarea></div>
+      <div class="form-actions"><button class="btn primary">إضافة كمسودة</button></div></form></div>
+    <div class="admin-list" data-records="catalog"></div>
+  </section>
+  <section class="admin-section" data-admin-section="activations"><h1 class="admin-headline">أكواد تفعيل VIP</h1>
+    <div class="panel admin-card"><h3>إنشاء كود جديد</h3><form class="form-grid" data-create="activations"><div class="field"><label>باقة الاشتراك</label><select class="select" name="plan_id" id="activation-plan" required></select></div>
+      <div class="field"><label>ملاحظة داخلية</label><input class="input" name="note" placeholder="اختياري"/></div><div class="form-actions"><button class="btn primary">إنشاء كود فريد</button></div></form>
+      <div class="note" id="new-code-result"></div><p class="tiny muted">يظهر الكود مرة واحدة بعد إنشائه. لا يُخزن كنص صريح في قاعدة البيانات.</p></div>
+    <div class="admin-list" data-records="activations"></div>
+  </section>
+  <section class="admin-section" data-admin-section="plans"><h1 class="admin-headline">باقات الاشتراك</h1>
+    <div class="panel admin-card"><h3>إضافة باقة</h3><form class="form-grid" data-create="plans"><div class="field"><label>اسم الباقة</label><input class="input" name="name" required/></div>
+      <div class="field"><label>الأيام</label><input class="input" name="duration_days" type="number" min="1" max="3660" value="30" required/></div>
+      <div class="field"><label>أقصى أجهزة</label><input class="input" name="max_devices" type="number" min="1" max="20" value="1"/></div>
+      <div class="field"><label>أقصى اتصالات (سيتم فرضه عند جاهزية الجلسات)</label><input class="input" name="max_connections" type="number" min="1" max="20" value="1"/></div>
+      <div class="field"><label>النوع</label><select class="select" name="kind"><option value="hybrid">هجين</option><option value="private">خاص</option><option value="general">عام</option></select></div>
+      <div class="form-actions"><button class="btn primary">حفظ الباقة</button></div></form></div><div class="admin-list" data-records="plans"></div>
+  </section>
+  <section class="admin-section" data-admin-section="subscriptions"><h1 class="admin-headline">اشتراكات المستخدمين</h1><p class="note">تجديد أو إيقاف الاشتراكات؛ يلزم UUID صحيح للمستخدم الموجود في Supabase.</p>
+    <div class="panel admin-card"><h3>منح اشتراك</h3><form class="form-grid" data-create="subscriptions"><div class="field"><label>معرّف المستخدم UUID</label><input name="user_id" class="input" required placeholder="xxxxxxxx-xxxx-..."/></div>
+      <div class="field"><label>الباقة</label><select class="select" id="sub-plan" name="plan_id" required></select></div>
+      <div class="field"><label>ينتهي في</label><input name="ends_at" class="input" type="datetime-local" required/></div>
+      <div class="form-actions"><button class="btn primary">إضافة الاشتراك</button></div></form></div><div class="admin-list" data-records="subscriptions"></div>
+  </section>
+  <section class="admin-section" data-admin-section="settings"><h1 class="admin-headline">إعدادات النظام</h1>
+    <div class="panel admin-card"><h3>الخدمات المرتبطة</h3><p>Supabase: <span class="tag ok">قاعدة بيانات أكّد</span></p><p>Railway: <span class="tag">خادم AKKAD CORE</span></p>
+      <p>Cloudflare: <span class="tag">akkad-tv.akkadtv10.workers.dev</span></p><p>OneSignal: <span class="tag">akkad-tv</span></p>
+      <p class="note">إرسال إشعار اختباري وتحديثات التطبيق الحقيقية تتطلب إعداد FCM/OneSignal وبناء نسخة Android أولاً.</p>
+      <p class="note">المدير الأساسي: akkadtv10@gmail.com، صلاحياته تُراجع من جدول المديرين على الخادم.</p>
+    </div></section>
+</main><footer class="admin-bottom"><button data-admin-tab="overview"><span>⌂</span>الرئيسية</button><button data-admin-tab="sources"><span>◉</span>المصادر</button><button data-admin-tab="activations"><span>♕</span>VIP</button><button data-admin-tab="catalog"><span>▣</span>المحتوى</button><button data-admin-tab="settings"><span>⚙</span>النظام</button></footer>
+<div id="toast" role="status" class="toast"></div><script src="/akkad.js" defer></script></body></html>

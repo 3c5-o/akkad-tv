@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="شعار أكّد">
+<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0ae"/><stop offset=".42" stop-color="#bb7f36"/><stop offset=".72" stop-color="#ffd99a"/><stop offset="1" stop-color="#906025"/></linearGradient></defs>
+<rect x="6" y="6" width="244" height="244" rx="54" fill="#10151b" stroke="url(#gold)" stroke-width="7"/>
+<path d="M70 80 L128 29 186 80 V97 H70Z" fill="url(#gold)" opacity=".9"/>
+<path d="M80 97H176V113H80Z M94 72H110V97H94Z M120 57H136V97H120Z M146 72H162V97H146Z" fill="#121a24"/>
+<text x="128" y="181" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-weight="900" font-size="90" fill="url(#gold)">أكّد</text>
+<path d="M60 204H196" stroke="url(#gold)" stroke-width="4" stroke-linecap="round"/>
+</svg>
