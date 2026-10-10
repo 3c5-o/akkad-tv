@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { handleSourceAction, handlePreflight, validateEndpoint } from './source-manager.mjs';
 import { adminExtras } from './admin-extras.mjs';
+import { viewerRoutes } from './viewer-service.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -69,6 +70,8 @@ async function route(req,res) {
   const url=new URL(req.url||'/', 'http://localhost');
   const p=url.pathname;
   if(req.method==='GET' && p==='/health') return json(res,200,{ok:true,service:'AKKAD CORE',supabase_configured:Boolean(supaUrl && apiKey)});
+  if(p==='/api/auth/username'||p.startsWith('/api/admin/viewers'))
+    return viewerRoutes({req,res,p,json,auth,readBody,apiRequest});
   if(p.startsWith('/api/admin/extra/') || /^\/api\/free\/[A-Z0-9]{2,12}\/catalog$/.test(p))
     return adminExtras({req,res,p,json,auth,apiRequest,readBody});
   if(req.method==='GET' && (p==='/'||p==='/tv'||p==='/admin')) return serveFile(res,p==='/admin'?'admin.html':'tv.html');
