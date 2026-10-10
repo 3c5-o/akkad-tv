@@ -172,13 +172,13 @@ export async function inspectAccount(source,credentials,allowedHosts,options={})
    active_connections:overview.active_connections??null,counts,warnings,checked_at:new Date().toISOString(),
    account_verified:true};
 }
-export async function handlePreflight({req,res,p,admin,apiRequest,readBody,json}){
+export async function handlePreflight({req,res,p,admin,apiRequest,readBody,json,inspect=inspectAccount}){
  if(!['/api/admin/sources/preflight','/api/admin/sources/verified-create'].includes(p))return false;
  const a=await admin(req);
  if(req.method!=='POST')throw error('طريقة الطلب غير مدعومة',405);
  const input=await readBody(req),hosts=process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'';
  const {source,credentials}=prepareAccountDraft(input,hosts,process.env.AKKAD_ALLOW_HTTP_SOURCES==='true');
- const overview=await inspectAccount(source,credentials,hosts,{allowHttp:source.allow_insecure_http});
+ const overview=await inspect(source,credentials,hosts,{allowHttp:source.allow_insecure_http});
  if(p.endsWith('/preflight'))return json(res,200,{ok:true,overview,saved:false});
  const now=new Date().toISOString(),encrypted=encrypt(credentials,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
  const added=await apiRequest('/rest/v1/akkad_sources',{method:'POST',token:a.token,body:{
