@@ -147,8 +147,16 @@ async function loadTmdb(){
  catch(e){fail(e,$('#tmdb-status'))}
 }
 async function loadStatus(){
- try{const v=await api('/health');$('#system-connection').textContent='AKKAD CORE: '+(v.ok?'متصل':'غير متصل')+' • Supabase: '+(v.supabase_configured?'مهيأ':'غير مهيأ')}
- catch(e){$('#system-connection').textContent=e.message}
+ try{
+  const [health,flags]=await Promise.all([api('/health'),api('/api/admin/extra/status')]);
+  $('#system-connection').textContent=
+    'AKKAD CORE: '+(health.ok?'متصل':'غير متصل')+
+    '\nSupabase: '+(health.supabase_configured?'مهيأ':'غير مهيأ')+
+    '\nإدارة حسابات المشاهدين: '+(flags.service_role_configured&&flags.username_secret_configured?'متاحة':'تحتاج SUPABASE_SERVICE_ROLE_KEY على Railway')+
+    '\nالمزامنة التلقائية: '+(flags.scheduler_available?'جاهزة للتفعيل من المصادر':'تحتاج مفتاح خدمة Supabase')+
+    '\nTMDb: '+(flags.tmdb_configured?'تمت إضافة المفتاح':'أدخل المفتاح من صفحة TMDb')+
+    '\nقائمة نطاقات مزودي IPTV: '+(flags.source_host_allowlist_configured?'مهيأة':'لم تُهيأ');
+ }catch(e){$('#system-connection').textContent=e.message}
 }
 async function setup(){
  $$('[data-section]').forEach(b=>b.onclick=()=>switchTo(b.dataset.section));
