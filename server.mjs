@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { handleSourceAction, validateEndpoint } from './source-manager.mjs';
+import { handleSourceAction, handlePreflight, validateEndpoint } from './source-manager.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -105,6 +105,9 @@ async function route(req,res) {
     if(!uuidRe.test(id)) return json(res,400,{error:'Invalid media ID'});
     const a=await auth(req);
     return json(res,200,await apiRequest('/rest/v1/rpc/akkad_get_playback',{method:'POST',token:a.token,body:{p_item:id}}));
+  }
+  if(p==='/api/admin/sources/preflight'||p==='/api/admin/sources/verified-create'){
+    return handlePreflight({req,res,p,admin:r=>auth(r,{admin:true}),apiRequest,readBody,json});
   }
   if(/^\/api\/admin\/sources\/[0-9a-f-]{36}\/(credentials|check|sync|jobs)$/.test(p)) {
     return handleSourceAction({req,res,p,admin:r=>auth(r,{admin:true}),apiRequest,readBody,json});
