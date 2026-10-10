@@ -30,7 +30,7 @@ export async function adminExtras({req,res,p,auth,readBody,apiRequest,json}){
  }
  const admin=await auth(req,{admin:true});
  const get=(t,query='')=>q(t,query,admin.token);
- const change=(t,method,query,body)=>apiRequest('/rest/v1/akkad_'+t+query,{method,body,token:admin.token,extraHeaders:{Prefer:'return=representation'}});
+ const change=(t,method,query,body)=>apiRequest('/rest/v1/akkad_'+t+query,{method,body,token:admin.token,extraHeaders:{Prefer:t==='config'?'resolution=merge-duplicates,return=representation':'return=representation'}});
  const route=p.slice('/api/admin/extra/'.length);
  if(route==='tmdb'){
   if(req.method==='GET'){
