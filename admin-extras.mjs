@@ -95,8 +95,7 @@ export async function adminExtras({req,res,p,auth,readBody,apiRequest,json}){
  }
  if(req.method==='DELETE'){
   if(admin.role!=='super_admin')err('حذف المصادر للمدير الأساسي فقط',403);
-  await change('catalog','PATCH','?source_id=eq.'+id,{published:false});
-  await change('sources','DELETE','?id=eq.'+id);
+  await apiRequest('/rest/v1/rpc/akkad_admin_delete_source',{method:'POST',token:admin.token,body:{p_source:id}});
   return json(res,200,{ok:true});
  }
  err('طريقة غير مدعومة',405);
