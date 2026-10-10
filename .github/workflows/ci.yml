@@ -16,6 +16,11 @@ jobs:
         run: |
           node --check server.mjs
           node --check public/akkad.js
+          node --check public/control.js
+          node --check admin-extras.mjs
+          node --check viewer-service.mjs
+          node --check auto-import.mjs
+          node --check source-manager.mjs
           node --check cloudflare/worker.js
       - name: API smoke tests
         run: npm test
