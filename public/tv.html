@@ -4,12 +4,13 @@
 <div class="rotate-hint"><div class="rotate-icon">▣</div><h2>أدر الجهاز إلى الوضع الأفقي</h2><p class="muted">تطبيق أكّد مصمم للمشاهدة على الشاشات الأفقية.</p></div>
 <div class="login-shade hidden" id="tv-login"><div class="login-card">
   <div class="logo"><img src="/brand.svg" alt="أكّد"/>أكّد</div>
-  <h2>تسجيل الدخول VIP</h2><p class="muted small">سجّل حسابك لتفعيل الاشتراك والوصول إلى المشاهدة</p>
-  <form id="tv-login-form"><div class="field"><label>البريد الإلكتروني</label><input class="input" type="email" name="email" required autocomplete="username" placeholder="البريد الإلكتروني"/></div>
+  <h2>تسجيل الدخول إلى أكّد</h2><p class="muted small">استخدم اسم المستخدم وكلمة المرور اللذين أنشأهما لك مدير المنصة.</p>
+  <form id="tv-login-form"><div class="field"><label>اسم المستخدم</label><input class="input" name="username" required autocomplete="username" placeholder="اسم المستخدم"/></div>
     <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" required autocomplete="current-password" placeholder="كلمة المرور"/></div>
-    <div class="field"><label>كود التفعيل (اختياري)</label><input class="input" name="activation" placeholder="AKKAD-..." autocomplete="off"/></div>
+    <label class="ctrl-free-check" style="display:flex;align-items:center;gap:10px;text-align:right;color:#ebd3ad"><input id="tv-use-free" type="checkbox"/> لدي كود مصدر مجاني</label>
+    <div id="tv-free-entry" class="field hidden"><label>كود المصدر</label><input class="input" name="source_code" maxlength="12" placeholder="A1" autocomplete="off"/></div>
     <button class="btn primary" type="submit">دخول إلى أكّد</button></form>
-  <button id="tv-guest" class="btn ghost" type="button">معاينة الأقسام بدون اشتراك</button>
+  <button id="tv-guest" class="btn ghost" type="button">معاينة أقسام التطبيق</button>
   <span class="muted tiny">بث المحتوى يتطلب اشتراكاً نشطاً ومصدراً مرخصاً</span>
 </div></div>
 <div class="tv-page">
