@@ -1,4 +1,4 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#0b1017"/><title>أكّد | البث والترفيه</title><link rel="icon" href="/brand.svg"/><link rel="stylesheet" href="/akkad.css"/></head>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#0c0906"/><title>أكّد | البث والترفيه</title><link rel="icon" href="/brand.svg"/><link rel="stylesheet" href="/akkad.css"/><link rel="stylesheet" href="/tv-gold.css"/></head>
 <body data-app="tv"><div class="page-bg"></div>
 <div id="splash" class="splash"><div class="logo"><img src="/brand.svg" alt="شعار أكّد"/><span>أكّد</span></div><div class="spinner"></div><div class="tagline">من أرض الحضارات إلى عالم الترفيه</div></div>
 <div class="rotate-hint"><div class="rotate-icon">▣</div><h2>أدر الجهاز إلى الوضع الأفقي</h2><p class="muted">تطبيق أكّد مصمم للمشاهدة على الشاشات الأفقية.</p></div>
@@ -14,7 +14,7 @@
   <span class="muted tiny">بث المحتوى يتطلب اشتراكاً نشطاً ومصدراً مرخصاً</span>
 </div></div>
 <div class="tv-page">
-  <header class="tv-topbar">
+  <header class="tv-topbar"><button id="tv-back" class="btn small" aria-label="الرجوع للرئيسية">رجوع</button>
     <div class="logo"><img src="/brand.svg" alt="أكّد"/><span>أكّد</span></div>
     <nav class="tv-tabs" aria-label="الأقسام الرئيسية">
       <button class="tv-tab active" data-tv-tab="home">الرئيسية</button><button class="tv-tab" data-tv-tab="live">بث مباشر</button>
@@ -36,11 +36,11 @@
     </aside>
     <div class="tv-content">
       <section class="tv-section active" data-tv-section="home">
-        <div class="hero panel"><div><span class="tag">هوية عراقية • تجربة عصرية</span><h1>عالم الترفيه بين يديك</h1><p>القنوات والأفلام والمسلسلات في منصة واحدة. تصميم أصلي مستوحى من حضارة أكّد.</p><button data-tv-tab="live" class="btn primary">استكشف البث المباشر</button></div><img class="hero-logo" src="/brand.svg" alt="شعار أكّد"/></div>
+        <div class="hero panel"><div><span class="tag">هوية عراقية • تجربة عصرية</span><h1>AKKAD <small>TV</small></h1><p>ترفيه بلا حدود</p><button data-tv-tab="live" class="btn primary">استكشف البث المباشر</button></div><img class="hero-logo" src="/brand.svg" alt="شعار أكّد"/></div>
         <div class="feature-grid">
           <button class="feature" data-tv-tab="live"><span class="icon">▣</span>بث مباشر</button><button class="feature" data-tv-tab="movie"><span class="icon">◉</span>أفلام</button>
           <button class="feature" data-tv-tab="series"><span class="icon">▤</span>مسلسلات</button><button class="feature" data-tv-tab="anime"><span class="icon">✧</span>أنمي</button>
-        </div><div class="info-line"><div class="stat">اشتراكات VIP مرنة</div><div class="stat">اختيار مصدر التشغيل المتاح</div><div class="stat">دعم صيَغ متعددة حسب الجهاز</div></div>
+        <button class="feature" data-tv-tab="playlist"><span class="icon">☷</span>قائمة التشغيل</button><button class="feature" data-tv-tab="settings"><span class="icon">⚙</span>الإعدادات</button></div><div class="info-line"><div class="stat">اشتراكات VIP مرنة</div><div class="stat">اختيار مصدر التشغيل المتاح</div><div class="stat">دعم صيَغ متعددة حسب الجهاز</div></div>
         <div class="panel" style="padding:20px;margin-top:18px"><h2 class="gold">أضيف حديثاً</h2><div id="tv-featured" class="poster-grid"></div></div>
       </section>
       <section class="tv-section" data-tv-section="live"><div class="content-header"><h2 class="gold">البث المباشر</h2><span class="tag">قائمة القنوات</span></div>
@@ -50,7 +50,7 @@
       <section class="tv-section" data-tv-section="movie"><div class="content-header"><h2 class="gold">الأفلام</h2><span id="count-movie" class="tag">0 فيلم</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-movie"></div><div id="grid-movie" class="poster-grid"></div></div></section>
       <section class="tv-section" data-tv-section="series"><div class="content-header"><h2 class="gold">المسلسلات</h2><span id="count-series" class="tag">0 مسلسل</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-series"></div><div id="grid-series" class="poster-grid"></div></div></section>
       <section class="tv-section" data-tv-section="anime"><div class="content-header"><h2 class="gold">الأنمي</h2><span id="count-anime" class="tag">0 عمل</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-anime"></div><div id="grid-anime" class="poster-grid"></div></div></section>
-      <section class="tv-section" data-tv-section="playlist"><h2 class="gold">قائمة التشغيل</h2><div class="panel" style="padding:25px;max-width:680px"><p>تتم إدارة قوائم التشغيل المرخصة مركزياً من لوحة أكّد. يمكن للمستخدم مشاهدة المحتوى المتاح ضمن اشتراكه.</p><div id="playlist-account" class="stat">لم تسجّل الدخول بعد</div><p class="note">لن نعرض عنوان السيرفرات أو بيانات المزود الحساسة للمستخدم.</p><button class="btn" id="playlist-refresh">تحديث المحتوى</button></div></section>
+      <section class="tv-section" data-tv-section="playlist"><h2 class="gold">قائمة التشغيل</h2><div class="panel" style="padding:25px;max-width:680px"><p>تتم إدارة قوائم التشغيل المرخصة مركزياً من لوحة أكّد. يمكن للمستخدم مشاهدة المحتوى المتاح ضمن اشتراكه.</p><div id="playlist-account" class="stat">لم تسجّل الدخول بعد</div><p class="note">المحتوى المتاح مرتبط بحسابك أو بكود المصدر الذي أدخلته.</p><button class="btn" id="playlist-refresh">تحديث المحتوى</button></div></section>
       <section class="tv-section" data-tv-section="settings"><h2 class="gold">الإعدادات</h2><div class="settings-grid">
         <button class="settings-item" id="setting-refresh">⟳ تحديث المحتوى</button><button class="settings-item" id="setting-login">♙ تسجيل VIP</button><button class="settings-item" id="setting-theme">☷ المظهر الذهبي</button>
         <button class="settings-item" id="setting-subtitles">▤ الترجمة عبر المشغل</button><button class="settings-item" id="setting-player">▷ المشغل الداخلي</button><button class="settings-item" id="setting-logout">⇥ تسجيل الخروج</button>
