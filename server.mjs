@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { handleSourceAction } from './source-manager.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -105,6 +106,9 @@ async function route(req,res) {
     const a=await auth(req);
     return json(res,200,await apiRequest('/rest/v1/rpc/akkad_get_playback',{method:'POST',token:a.token,body:{p_item:id}}));
   }
+  if(/^\/api\/admin\/sources\/[0-9a-f-]{36}\/(credentials|check|sync|jobs)$/.test(p)) {
+    return handleSourceAction({req,res,p,admin:r=>auth(r,{admin:true}),apiRequest,readBody,json});
+  }
   if(p.startsWith('/api/admin/')){
     const a=await auth(req,{admin:true});
     const parts=p.slice('/api/admin/'.length).split('/'); const name=parts[0];const id=parts[1];
@@ -118,6 +122,14 @@ async function route(req,res) {
       const body=await readBody(req);
       const record=allowed(body,cfg.fields);
       if(name==='sources' && record.license_confirmed!==true) return json(res,400,{error:'يجب تأكيد ترخيص المصدر'});
+      if(name==='sources'){
+        try {
+          const u=new URL(record.endpoint);
+          if(u.protocol!=='https:' || u.username || u.password || u.search || u.hash || !u.hostname.includes('.') || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname)) throw new Error('unsafe');
+          record.endpoint=u.toString().replace(/\/$/,'');
+        } catch {return json(res,400,{error:'استخدم عنوان خادم HTTPS بدون بيانات دخول أو معاملات في الرابط'});}
+        delete record.credential_ref;
+      }
       if(name==='sources') record.enabled=false;
       let newCode;
       if(name==='activations') {
