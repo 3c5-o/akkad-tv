@@ -24,5 +24,15 @@ test('local health and portrait/landscape routes', async () => {
     assert.equal(protectedCheck.status,401);
     const protectedSync=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/22c1c6b4-c44e-4cd7-9fac-eb2dfc29d00f/sync',{method:'POST'});
     assert.equal(protectedSync.status,401);
+    const preflight=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/preflight',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+    assert.equal(preflight.status,401);
+    const verified=await fetch('http://127.0.0.1:'+port+'/api/admin/sources/verified-create',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+    assert.equal(verified.status,401);
+    assert.match(await adminClone(port),/source-preflight/);
   } finally {child.kill();}
 });
+
+async function adminClone(port){
+ const r=await fetch('http://127.0.0.1:'+port+'/admin');
+ return r.text();
+}
