@@ -23,10 +23,9 @@ export async function adminExtras({req,res,p,auth,readBody,apiRequest,json}){
  if(free){
   if(req.method!=='GET')err('طريقة غير مدعومة',405);
   const code=p.split('/')[3];
-  const sources=await q('sources','?select=id,name&free_code=eq.'+code+'&free_enabled=eq.true&enabled=eq.true&license_confirmed=eq.true');
-  if(!sources?.length)err('كود غير متاح',404);
-  const items=await q('catalog','?select=id,title,kind,category,description,poster_url,release_year&published=eq.true&source_id=eq.'+sources[0].id+'&limit=200');
-  return json(res,200,{source:{name:sources[0].name,code},items:items||[]});
+  const data=await apiRequest('/rest/v1/rpc/akkad_free_catalog',{method:'POST',body:{p_code:code}});
+  if(!data?.source)err('كود المصدر غير متاح',404);
+  return json(res,200,{source:data.source,items:data.items||[]});
  }
  const admin=await auth(req,{admin:true});
  const get=(t,query='')=>q(t,query,admin.token);
