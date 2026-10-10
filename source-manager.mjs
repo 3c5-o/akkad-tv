@@ -27,7 +27,15 @@ async function readRemote(url,allowed,options={}){
    ips=net.isIP(u.hostname)===4?[{address:u.hostname}]:await (options.lookup||lookup)(u.hostname,{all:true});
  }catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
  if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
- let r;try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw error('تعذر الاتصال بخادم IPTV',502);}
+ let r;
+ try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}
+ catch(e){
+   const code=String(e?.cause?.code||'');
+   if(e?.name==='TimeoutError'||/TIMEOUT|ETIMEDOUT/.test(code))throw error('انتهت مهلة اتصال خادم IPTV (15 ثانية): تحقق من المنفذ واتصال المزود',504);
+   if(['ECONNREFUSED','EHOSTUNREACH','ENETUNREACH'].includes(code))throw error('رفض المزود الاتصال أو خادم IPTV غير متاح من Railway',502);
+   if(['ENOTFOUND','EAI_AGAIN'].includes(code))throw error('تعذّر العثور على DNS لخادم IPTV',502);
+   throw error('تعذّر الاتصال بالمزود: تحقق من العنوان والمنفذ وعدم وجود حظر على خوادم Railway',502);
+ }
  if(!r.ok)throw error('المصدر أعاد HTTP '+r.status,502);
  const max=24*1024*1024;
  if(Number(r.headers.get('content-length')||0)>max)throw error('قائمة المصدر أكبر من الحد',413);
