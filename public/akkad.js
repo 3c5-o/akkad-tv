@@ -3,8 +3,10 @@
 const $=(selector,root=document)=>root.querySelector(selector);
 const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
 const mode=document.body.dataset.app;
-const sessionKey='akkad_session_v1';
+const sessionKey='akkad_session_v1',refreshKey='akkad_refresh_v1';
 let token=sessionStorage.getItem(sessionKey)||'';
+let refreshToken=sessionStorage.getItem(refreshKey)||'';
+let refreshRequest=null;
 let currentSession=null;
 let catalog=[];
 const records={};
@@ -12,22 +14,51 @@ function notice(message){const el=$('#toast');if(!el)return;el.textContent=messa
 function h(text){return String(text??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function thumb(url){return typeof url==='string'&&/^https:\/\//i.test(url)?url:null;}
 function activeSub(){return currentSession?.subscriptions?.some(s=>s.status==='active'&&new Date(s.ends_at)>new Date()&&new Date(s.starts_at)<=new Date());}
-async function api(path,options={}){
-  const headers={'content-type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};
-  const response=await fetch(path,{...options,headers:{...headers,...options.headers}});
-  const data=await response.json().catch(()=>({error:'استجابة غير متوقعة'}));
-  if(!response.ok)throw new Error(data?.error||data?.message||'فشل الطلب');
-  return data;
+async function refreshSession(){
+ if(!refreshToken)return false;
+ if(!refreshRequest){
+  refreshRequest=(async()=>{
+   try{
+    const response=await fetch('/api/auth/refresh',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({refresh_token:refreshToken})});
+    if(!response.ok)throw new Error('refresh failed');
+    const data=await response.json();
+    if(!data.access_token||!data.refresh_token)throw new Error('invalid refresh response');
+    token=data.access_token;refreshToken=data.refresh_token;
+    sessionStorage.setItem(sessionKey,token);sessionStorage.setItem(refreshKey,refreshToken);
+    return true;
+   }catch{
+    token='';refreshToken='';currentSession=null;
+    sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);
+    return false;
+   }
+  })().finally(()=>{refreshRequest=null;});
+ }
+ return refreshRequest;
+}
+async function api(path,options={},retried=false){
+ const headers={'content-type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};
+ const response=await fetch(path,{...options,headers:{...headers,...options.headers}});
+ const data=await response.json().catch(()=>({error:'استجابة غير متوقعة'}));
+ if(!response.ok){
+  const message=String(data?.error||data?.message||'فشل الطلب');
+  const expired=/(?:jwt.*expired|token.*expired|expired.*token|invalid jwt|token is expired|invalid claims)/i.test(message);
+  if(!retried&&expired&&refreshToken&&await refreshSession())return api(path,options,true);
+  if(expired)throw new Error('انتهت جلسة الإدارة؛ سجل دخولك من جديد');
+  throw new Error(message);
+ }
+ return data;
 }
 async function login(form){
   const data=new FormData(form);
   const result=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:data.get('email'),password:data.get('password')})});
-  token=result.access_token;
+  token=result.access_token;refreshToken=result.refresh_token||'';
   sessionStorage.setItem(sessionKey,token);
+  if(refreshToken)sessionStorage.setItem(refreshKey,refreshToken);else sessionStorage.removeItem(refreshKey);
   currentSession=await api('/api/session');
   return data;
 }
-function logout(){token='';currentSession=null;sessionStorage.removeItem(sessionKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');notice('تم تسجيل الخروج');}
+function logout(){token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');notice('تم تسجيل الخروج');}
 function openTv(section){
   $$('.tv-section').forEach(el=>el.classList.toggle('active',el.dataset.tvSection===section));
   $$('[data-tv-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tvTab===section));
