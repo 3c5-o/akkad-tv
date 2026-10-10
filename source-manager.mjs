@@ -192,7 +192,7 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
   const counts=Array.isArray(countsData)?countsData[0]:countsData;
   const now=new Date().toISOString();
   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_synced_at:now,last_error:null,live_count:counts?.live||0,movie_count:counts?.movie||0,series_count:counts?.series||0}});
-  const nextOffset=Math.min(gathered.total,offset+gathered.items.length);
+  const nextOffset=Math.min(gathered.total,offset+limit);
   await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'success',imported_count:items.length,skipped_count:gathered.invalid,requested_offset:offset,next_offset:nextOffset,available_count:gathered.total,completed_at:now}});
   return json(res,200,{ok:true,imported:items.length,available:gathered.total,skipped:gathered.invalid,stored:counts,next_offset:nextOffset,has_more:nextOffset<gathered.total,note:'تُضاف البيانات كمسودات دون نسخ أسرار وروابط تشغيل'});
  }catch(e){
