@@ -26,22 +26,29 @@
       <div class="field"><label>اسم المصدر</label><input class="input" name="name" required placeholder="المصدر الأول"/></div>
       <div class="field"><label>نوع المصدر</label><select class="select" name="kind"><option value="xtream">Xtream</option><option value="m3u">M3U</option><option value="hls">HLS</option><option value="direct">مباشر</option></select></div>
       <div class="field"><label>رابط خادم المصدر (HTTP أو HTTPS بدون كلمة مرور)</label><input class="input" name="endpoint" type="url" required placeholder="http://provider.example:8080 أو https://provider.example"/></div>
-      <div class="field"><label>طريقة حفظ بيانات الدخول</label><span class="note">احفظ المصدر أولاً ثم أدخل اسم المستخدم وكلمة المرور في النموذج الآمن أدناه.</span></div>
+      <div class="field" data-new-xtream><label>اسم مستخدم Xtream</label><input class="input" name="username" autocomplete="off" placeholder="اسم المستخدم، يبقى على الخادم"/></div>
+      <div class="field" data-new-xtream><label>كلمة مرور Xtream</label><input class="input" type="password" name="password" autocomplete="new-password" placeholder="لا تُخزّن قبل نجاح الفحص"/></div>
+      <div class="field hidden" data-new-m3u style="grid-column:1/-1"><label>رابط قائمة M3U الكامل</label><input class="input" type="password" name="playlist_url" autocomplete="off" placeholder="http://provider.example/get.php?..."/></div>
       <label class="field" style="display:flex;align-items:center;flex-direction:row"><input type="checkbox" name="license_confirmed" required/> أؤكد امتلاك حقوق إعادة التوزيع لهذا المصدر</label>
       <label class="field" style="display:flex;align-items:center;flex-direction:row;grid-column:1/-1"><input type="checkbox" name="allow_insecure_http" id="source-allow-http"/> السماح لـHTTP غير المشفر لهذا المصدر فقط</label>
       <p class="note" style="grid-column:1/-1;color:#f2c178">تنبيه أمني: في اتصال HTTP يستطيع من يراقب الشبكة بين الخادم والمزوّد قراءة بيانات الدخول وبيانات المحتوى. ننصح باستخدام HTTPS متى كان متوفراً. تظل بيانات المصادر مشفّرة أثناء تخزينها في أكّد.</p>
-      <div class="form-actions"><button class="btn primary">حفظ المصدر معطّلاً</button></div></form></div>
+      <div class="form-actions" style="display:flex;gap:9px;flex-wrap:wrap">
+        <button class="btn ghost" id="source-preflight" type="button">فحص الحساب قبل إضافته</button>
+        <button class="btn primary" type="submit">فحص وإضافة المصدر عند النجاح</button>
+      </div>
+      <div id="source-preflight-result" class="note" style="grid-column:1/-1;white-space:pre-wrap" role="status" aria-live="polite">أدخل بيانات الحساب ثم اضغط الفحص. ما راح يُحفظ أي حساب فاشل.</div>
+      </form></div>
     <div class="panel admin-card" id="source-tools">
   <h3>فحص حسابات IPTV والمزامنة</h3>
-  <p class="note">احفظ المصدر أعلاه أولاً. بعدها أدخل بيانات حسابه المشفّرة، وافحص الاتصال، ثم اختر القسم والعدد للمزامنة. يواصل النظام تلقائياً من الدفعة السابقة، والمحتوى يُضاف كمسودات غير منشورة.</p>
+  <p class="note">للمصادر القديمة: اختر المصدر وأدخل معلوماته ثم اضغط «فحص وحفظ»؛ ما تُحفظ بيانات الحساب إلا عند نجاح اتصال المزود. للمصادر الجديدة استخدم نموذج الفحص قبل الإضافة بالأعلى. يواصل النظام تلقائياً من الدفعة السابقة، والمحتوى يُضاف كمسودات غير منشورة.</p>
   <div class="form-grid">
     <div class="field" style="grid-column:1/-1"><label for="source-selected">المصدر المحدد</label><select class="select" id="source-selected"><option value="">اختر المصدر</option></select></div>
     <div class="field" data-xtream-field><label for="source-username">اسم مستخدم Xtream</label><input class="input" id="source-username" autocomplete="off" placeholder="اسم المستخدم"/></div>
     <div class="field" data-xtream-field><label for="source-password">كلمة مرور Xtream</label><input class="input" id="source-password" type="password" autocomplete="new-password" placeholder="تُشفّر عند الحفظ"/></div>
     <div class="field hidden" id="source-m3u-wrap" style="grid-column:1/-1"><label for="source-m3u-url">رابط قائمة M3U الكامل</label><input class="input" id="source-m3u-url" type="password" autocomplete="off" placeholder="https://provider.example/get.php?..."/><span class="note">الرابط الكامل قد يحتوي رموز وصول، لذلك سيُحفظ مشفراً فقط. يقبل http:// إذا كان هذا المصدر مصرحاً له بذلك.</span></div>
     <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="source-save-credentials" class="btn" type="button">حفظ بيانات الحساب بأمان</button>
-      <button id="source-check" class="btn" type="button">فحص المصدر</button>
+      <button id="source-save-credentials" class="btn" type="button">فحص الحساب وحفظه عند النجاح</button>
+      <button id="source-check" class="btn" type="button">إعادة فحص المصدر المحفوظ</button>
       <button id="source-jobs" class="btn ghost" type="button">سجل المزامنة</button>
     </div>
     <div class="field"><label for="source-sync-kind">القسم</label><select class="select" id="source-sync-kind"><option value="live">القنوات المباشرة</option><option value="movie">الأفلام</option><option value="series">المسلسلات</option></select></div>
