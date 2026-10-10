@@ -41,9 +41,9 @@ export function decrypt(row,key){
  try{const d=crypto.createDecipheriv('aes-256-gcm',Buffer.from(key,'hex'),Buffer.from(row.iv,'base64'));d.setAuthTag(Buffer.from(row.tag,'base64'));return JSON.parse(Buffer.concat([d.update(Buffer.from(row.ciphertext,'base64')),d.final()]).toString());}
  catch{throw error('فشل فك تشفير المصدر',503);}
 }
-export function parseM3U(body,sourceId,kind='live',limit=100){
+export function parseM3U(body,sourceId,kind='live',limit=100,offset=0){
  if(!body.trimStart().startsWith('#EXTM3U'))throw error('ملف M3U غير صحيح');
- const items=[],totals={live:0,movie:0,series:0};let meta=null;
+ const items=[],totals={live:0,movie:0,series:0};let meta=null,matched=0;
  for(const line0 of body.split(/\r?\n/)){
   const line=line0.trim();
   if(line.startsWith('#EXTINF:')){
@@ -52,9 +52,12 @@ export function parseM3U(body,sourceId,kind='live',limit=100){
   }else if(meta&&/^https?:\/\//i.test(line)){
    const k=/series|مسلسلات|episode/i.test(meta.group)?'series':/movie|vod|film|أفلام|سينما/i.test(meta.group)?'movie':'live';
    totals[k]++;
-   if(k===kind&&items.length<limit){
-    const item=normalized({name:meta.title,stream_id:meta.id||digest(line),stream_icon:meta.icon},k,meta.group,sourceId);
-    if(item)items.push(item);
+   if(k===kind){
+    if(matched>=offset&&matched<offset+limit){
+      const item=normalized({name:meta.title,stream_id:meta.id||digest(line),stream_icon:meta.icon},k,meta.group,sourceId);
+      if(item)items.push(item);
+    }
+    matched++;
    }
    meta=null;
   }
@@ -99,6 +102,7 @@ export async function verifySource(source,credentials,allowlist,options={}){
  throw error('نوع المصدر لا يدعم الفحص التلقائي بعد');
 }
 export async function collectSource(source,creds,kind,limit,allowlist,options={}){
+ const offset=Number.isSafeInteger(options.offset)&&options.offset>=0?options.offset:0;
  validateEndpoint(source.endpoint,allowlist);
  if(source.kind==='xtream'){
   const [catAction,listAction]=actions[kind];
@@ -106,12 +110,12 @@ export async function collectSource(source,creds,kind,limit,allowlist,options={}
   if(!Array.isArray(rows))throw error('الاستجابة لا تحتوي قائمة محتوى',502);
   const categories=new Map((Array.isArray(cats)?cats:[]).map(x=>[String(x.category_id),String(x.category_name||'عام')]));
   const items=[];let total=0;
-  for(const row of rows){const x=normalized(row,kind,categories.get(String(row.category_id)),source.id);if(x){total++;if(items.length<limit)items.push(x);}}
+  for(const row of rows){const x=normalized(row,kind,categories.get(String(row.category_id)),source.id);if(x){if(total>=offset&&total<offset+limit)items.push(x);total++;}}
   return {items,total,invalid:rows.length-total};
  }
  if(source.kind==='m3u'){
   const text=await readRemote(creds.playlist_url,allowlist,{...options,host:new URL(source.endpoint).hostname});
-  const parsed=parseM3U(text,source.id,kind,limit);
+  const parsed=parseM3U(text,source.id,kind,limit,offset);
   return {items:parsed.items,total:parsed.totals[kind],invalid:0};
  }
  throw error('المصدر لا يدعم المزامنة التلقائية بعد');
@@ -126,7 +130,7 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  const found=await query('sources',{where:'?select=*&id=eq.'+id});const source=found?.[0];
  if(!source)throw error('المصدر غير موجود',404);
  if(action==='jobs'&&req.method==='GET'){
-  const jobs=await query('source_sync_jobs',{where:'?select=id,kind,status,requested_limit,imported_count,skipped_count,error_summary,started_at,completed_at&source_id=eq.'+id+'&order=started_at.desc&limit=20'});
+  const jobs=await query('source_sync_jobs',{where:'?select=id,kind,status,requested_limit,requested_offset,next_offset,available_count,imported_count,skipped_count,error_summary,started_at,completed_at&source_id=eq.'+id+'&order=started_at.desc&limit=20'});
   return json(res,200,{jobs});
  }
  if(req.method!=='POST')throw error('طريقة الطلب غير مدعومة',405);
@@ -166,9 +170,14 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
  await query('source_sync_jobs',{method:'PATCH',where:'?source_id=eq.'+id+'&kind=eq.'+kind+'&status=eq.running&started_at=lt.'+new Date(Date.now()-600000).toISOString(),body:{status:'failed',completed_at:new Date().toISOString(),error_summary:'تجاوز المهمة مهلة التنفيذ'}});
  const running=await query('source_sync_jobs',{where:'?select=id&source_id=eq.'+id+'&kind=eq.'+kind+'&status=eq.running&limit=1'});
  if(running.length)throw error('مزامنة أخرى جارية',409);
- const job=await query('source_sync_jobs',{method:'POST',body:{source_id:id,kind,requested_limit:limit,status:'running'},prefer:'return=representation'});
+ const recent=await query('source_sync_jobs',{where:'?select=next_offset,available_count&source_id=eq.'+id+'&kind=eq.'+kind+'&status=eq.success&order=started_at.desc&limit=1'});
+ const offset=b.reset===true?0:(recent[0]?.next_offset||0);
+ if(b.reset!==true&&recent.length&&offset>=recent[0].available_count){
+   return json(res,200,{ok:true,complete:true,imported:0,available:recent[0].available_count,next_offset:offset,has_more:false,note:'اكتملت مزامنة القائمة؛ اختر إعادة من البداية لفحص العناصر الجديدة'});
+ }
+ const job=await query('source_sync_jobs',{method:'POST',body:{source_id:id,kind,requested_limit:limit,requested_offset:offset,status:'running'},prefer:'return=representation'});
  try{
-  const gathered=await collectSource(source,credentials,kind,limit,allowlist);
+  const gathered=await collectSource(source,credentials,kind,limit,allowlist,{offset});
   const items=[...new Map(gathered.items.map(x=>[x.external_id,x])).values()];
   if(items.length){
    const distinct=[...new Map(items.map(x=>[x.dedupe_key,x])).values()];
@@ -183,8 +192,9 @@ export async function handleSourceAction({req,res,p,admin,apiRequest,readBody,js
   const counts=Array.isArray(countsData)?countsData[0]:countsData;
   const now=new Date().toISOString();
   await query('sources',{method:'PATCH',where:'?id=eq.'+id,body:{last_synced_at:now,last_error:null,live_count:counts?.live||0,movie_count:counts?.movie||0,series_count:counts?.series||0}});
-  await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'success',imported_count:items.length,skipped_count:gathered.invalid,completed_at:now}});
-  return json(res,200,{ok:true,imported:items.length,available:gathered.total,skipped:gathered.invalid,stored:counts,note:'تُضاف البيانات كمسودات دون نسخ أسرار وروابط تشغيل'});
+  const nextOffset=Math.min(gathered.total,offset+gathered.items.length);
+  await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'success',imported_count:items.length,skipped_count:gathered.invalid,requested_offset:offset,next_offset:nextOffset,available_count:gathered.total,completed_at:now}});
+  return json(res,200,{ok:true,imported:items.length,available:gathered.total,skipped:gathered.invalid,stored:counts,next_offset:nextOffset,has_more:nextOffset<gathered.total,note:'تُضاف البيانات كمسودات دون نسخ أسرار وروابط تشغيل'});
  }catch(e){
   await query('source_sync_jobs',{method:'PATCH',where:'?id=eq.'+job[0].id,body:{status:'failed',error_summary:String(e.message).slice(0,180),completed_at:new Date().toISOString()}}).catch(()=>{});
   throw e;
