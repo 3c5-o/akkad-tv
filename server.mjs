@@ -72,7 +72,7 @@ async function route(req,res) {
   if(p.startsWith('/api/admin/extra/') || /^\/api\/free\/[A-Z0-9]{2,12}\/catalog$/.test(p))
     return adminExtras({req,res,p,json,auth,apiRequest,readBody});
   if(req.method==='GET' && (p==='/'||p==='/tv'||p==='/admin')) return serveFile(res,p==='/admin'?'admin.html':'tv.html');
-  if(req.method==='GET' && ['/akkad.css','/akkad.js','/brand.svg'].includes(p)) return serveFile(res,p.slice(1));
+  if(req.method==='GET' && ['/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg'].includes(p)) return serveFile(res,p.slice(1));
   if(req.method==='POST' && p==='/api/auth/login') {
     const body=await readBody(req);
     if(typeof body.email!=='string' || typeof body.password!=='string' || body.password.length>300) return json(res,400,{error:'Invalid credentials'});
