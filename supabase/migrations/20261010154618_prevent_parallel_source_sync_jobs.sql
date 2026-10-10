@@ -1,0 +1,1 @@
+create unique index if not exists akkad_one_running_source_job on public.akkad_source_sync_jobs(source_id,kind) where status='running';
