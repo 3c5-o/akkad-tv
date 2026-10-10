@@ -221,7 +221,7 @@ async function initTv(){
  $('#live-fullscreen').onclick=()=>$('#live-player video')?.requestFullscreen?.();
  await new Promise(r=>setTimeout(r,900));$('#splash').classList.add('hidden');
  if(token){try{currentSession=await api('/api/session');}catch{token='';sessionStorage.removeItem(sessionKey);}}
- refreshUser();if(!token)$('#tv-login').classList.remove('hidden');
+ refreshUser();if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else $('#tv-login').classList.add('hidden');
  await loadCatalog();
 }
 const recordTitle={
