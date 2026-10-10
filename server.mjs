@@ -26,7 +26,7 @@ const headers = { 'apikey': apiKey, 'content-type':'application/json' };
 async function apiRequest(endpoint, { method='GET', token, body, extraHeaders={} }={}) {
   if (!supaUrl || !apiKey) throw Object.assign(new Error('SUPABASE_NOT_CONFIGURED'),{status:503});
   const response = await fetch(supaUrl + endpoint,{
-    method,headers:{...headers,Authorization:'Bearer ' + (token || apiKey),...extraHeaders},
+    method,headers:{...headers,...(token?{Authorization:'Bearer '+token}:{}),...extraHeaders},
     body: body === undefined ? undefined : JSON.stringify(body),
     signal:AbortSignal.timeout(12000)
   });
