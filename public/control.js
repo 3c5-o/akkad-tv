@@ -210,9 +210,15 @@ function renderXtreamSources(){
   const o=document.createElement('option');o.value=s.id;o.textContent=s.name+' • '+statusText(s);o.selected=before.has(s.id);el.append(o);
  }
 }
+async function copyAdminValue(id){
+ const el=document.getElementById(id),value=el?.value;
+ if(!value)return notice('لا توجد بيانات للنسخ');
+ try{await navigator.clipboard.writeText(value);notice('تم النسخ')}
+ catch{el.select();notice('استخدم أمر النسخ في جهازك')}
+}
 async function loadXtreamAccounts(){
  const result=await api('/api/admin/xtream-accounts'),list=result.items||[];
- const actions=x=>'<div class="ctrl-item-actions"><button class="btn small" data-xtoggle="'+safe(x.id)+'">'+(x.active?'إيقاف':'تشغيل')+'</button><button class="btn small" data-xextend="'+safe(x.id)+'">تمديد</button><button class="btn small" data-xpass="'+safe(x.id)+'">تغيير كلمة المرور</button><button class="btn small danger" data-xdelete="'+safe(x.id)+'">حذف</button></div>';
+ const actions=x=>'<div class="ctrl-item-actions"><button class="btn small ghost" data-xcopy-user="'+safe(x.username)+'">نسخ اليوزر</button><button class="btn small" data-xtoggle="'+safe(x.id)+'">'+(x.active?'إيقاف':'تشغيل')+'</button><button class="btn small" data-xextend="'+safe(x.id)+'">تمديد</button><button class="btn small" data-xpass="'+safe(x.id)+'">تغيير كلمة المرور</button><button class="btn small danger" data-xdelete="'+safe(x.id)+'">حذف</button></div>';
  $('#xtream-users').innerHTML=list.length?list.map(x=>item(x.username,(x.active?'مفعّل':'موقوف')+' • انتهاء '+new Date(x.expires_at).toLocaleDateString('ar-IQ')+' • الاتصالات '+x.max_connections+' • المصادر '+(x.source_ids?.length||'الكل'),actions(x))).join(''):empty('لا توجد حسابات Xtream خاصة بأكّد');
  async function mutate(id,method,body){
   try{await api('/api/admin/xtream-accounts/'+id,{method,...(body?{body:JSON.stringify(body)}:{})});notice('تم تعديل الحساب');await loadXtreamAccounts()}catch(e){notice(e.message)}
@@ -220,12 +226,19 @@ async function loadXtreamAccounts(){
  $$('[data-xtoggle]').forEach(b=>b.onclick=()=>{const x=list.find(z=>z.id===b.dataset.xtoggle);if(x)mutate(x.id,'PATCH',{active:!x.active})});
  $$('[data-xextend]').forEach(b=>b.onclick=()=>{const n=Number(prompt('أيام التمديد','30'));if(Number.isInteger(n)&&n>0&&n<=3650)mutate(b.dataset.xextend,'PATCH',{duration_days:n})});
  $$('[data-xpass]').forEach(b=>b.onclick=()=>{const x=prompt('كلمة مرور جديدة من 8 أحرف أو أكثر');if(x?.length>=8)mutate(b.dataset.xpass,'PATCH',{password:x})});
- $$('[data-xdelete]').forEach(b=>b.onclick=()=>{if(confirm('حذف هذا الحساب؟'))mutate(b.dataset.xdelete,'DELETE')});
+ $('[data-xdelete]').forEach(b=>b.onclick=()=>{if(confirm('حذف هذا الحساب؟'))mutate(b.dataset.xdelete,'DELETE')});
+ $('[data-xcopy-user]').forEach(b=>b.onclick=async()=>{
+  try{await navigator.clipboard.writeText(b.dataset.xcopyUser);notice('تم نسخ اليوزر')}
+  catch{notice('انسخ اسم المستخدم من بطاقة الحساب')}
+ });
 }
 async function setup(){
  $$('[data-section]').forEach(b=>b.onclick=()=>switchTo(b.dataset.section));
  $$('[data-goto]').forEach(b=>b.onclick=()=>switchTo(b.dataset.goto));
  $$('[data-source-filter]').forEach(b=>b.onclick=()=>{sourceFilter=b.dataset.sourceFilter;$$('[data-source-filter]').forEach(x=>x.classList.toggle('active',x===b));renderSources()});
+ $('#xtream-copy-server').onclick=()=>copyAdminValue('xtream-server-value');
+ $('#xtream-copy-user').onclick=()=>copyAdminValue('xtream-user-value');
+ $('#xtream-server-value').value=location.origin;
  $('#xtream-reload').onclick=()=>loadXtreamAccounts().catch(e=>notice(e.message));
  $('#xtream-create-form').onsubmit=async e=>{
   e.preventDefault();const form=e.target,button=form.querySelector('button[type=submit]');
@@ -235,9 +248,10 @@ async function setup(){
    data.duration_days=Number(data.duration_days);data.max_connections=Number(data.max_connections);
    data.source_ids=[...$('#xtream-source-ids').selectedOptions].map(x=>x.value);
    const created=await api('/api/admin/xtream-accounts',{method:'POST',body:JSON.stringify(data)});
-   result.textContent='نجاح • '+created.item.username+' • انتهاء '+new Date(created.item.expires_at).toLocaleString('ar-IQ')+
-    ' • رابط Xtream: '+(created.server_url||location.origin)+' • احتفظ بكلمة المرور التي أنشأتها.';
-   form.reset();await loadXtreamAccounts();
+   $('#xtream-server-value').value=String(created.server_url||location.origin).replace(/\\/$/,'');
+   $('#xtream-user-value').value=created.item.username;
+   result.textContent='تم إنشاء حساب Xtream • صالح حتى '+new Date(created.item.expires_at).toLocaleString('ar-IQ')+'. انسخ معلومات الاتصال من الحقول أدناه.';
+   await loadXtreamAccounts();
   }catch(e){fail(e,result)}finally{button.disabled=false}
  };
  $('#ctrl-reload').onclick=()=>refreshAll();$('#ctrl-logout').onclick=logout;
