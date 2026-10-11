@@ -62,17 +62,17 @@ export async function instantCatalog({req,res,p,url,auth,apiRequest,json}){
     if(!entry||Date.now()-entry.when>90000){
      const sealed=(await db('source_credentials','?select=*&source_id=eq.'+source.id+'&limit=1'))[0];
      if(!sealed)throw failure('بيانات المزود غير محفوظة',503);
-     entry={when:Date.now(),credentials:decrypt(sealed,process.env.AKKAD_SOURCE_ENCRYPTION_KEY),pages:new Map()};
-     cache.set(key,entry);if(cache.size>100)cache.clear();
+     entry={when:Date.now(),credentials:decrypt(sealed,process.env.AKKAD_SOURCE_ENCRYPTION_KEY),snapshot:null};
+     cache.set(key,entry);if(cache.size>15)cache.clear();
     }
     // Fetch only the requested page; the upstream may return a complete Xtream list.
     const localOffset=Math.max(0,offset-index);
     const needed=Math.max(1,limit-items.length);
-    const pageKey=localOffset+':'+needed;
-    let page=entry.pages.get(pageKey);
-    if(!page){page=await collectSource(source,entry.credentials,kind,needed,
-     process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'',{offset:localOffset,allowHttp:source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true'});
-     entry.pages.set(pageKey,page);}
+    if(!entry.snapshot){
+     entry.snapshot=await collectSource(source,entry.credentials,kind,500000,
+      process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'',{offset:0,allowHttp:source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true'});
+    }
+    const page={total:entry.snapshot.total,items:entry.snapshot.items.slice(localOffset,localOffset+needed)};
     count+=page.total;
     if(items.length<limit&&offset<index+page.total){
      items.push(...page.items.map(x=>({...x,id:source.id+':'+kind+':'+x.external_id,source_id:source.id,source_name:source.name})).slice(0,limit-items.length));
