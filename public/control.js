@@ -70,8 +70,13 @@ function renderSources(){
    '<div class="provider-meta"><div><strong>'+Number(s.live_count||0)+'</strong><span>قناة</span></div><div><strong>'+Number(s.movie_count||0)+'</strong><span>فيلم</span></div><div><strong>'+Number(s.series_count||0)+'</strong><span>مسلسل</span></div></div>'+
    '<div class="muted small">'+(s.free_enabled?'الكود المجاني: '+safe(s.free_code):'بدون كود مجاني')+' • '+(s.auto_import?'مزامنة تلقائية مفعّلة':'مزامنة يدوية')+'</div>'+
    (s.last_error?'<p class="muted small">'+safe(s.last_error)+'</p>':'')+
-   '<div class="provider-actions"><button class="btn small" data-edit-source="'+safe(s.id)+'">إدارة وتعديل</button><button class="btn small ghost" data-inspect-source="'+safe(s.id)+'">فحص مجدداً</button></div></div>';
+   '<div class="provider-actions"><button class="btn small" data-edit-source="'+safe(s.id)+'">إدارة وتعديل</button><button class="btn small ghost" data-inspect-source="'+safe(s.id)+'">فحص مجدداً</button><button class="btn small danger" data-delete-source="'+safe(s.id)+'">حذف</button></div></div>';
  }).join(''):empty('لا توجد مصادر في هذه الحالة');
+ $$('[data-delete-source]').forEach(b=>b.onclick=async()=>{
+  const src=resources.sources.find(x=>x.id===b.dataset.deleteSource);
+  if(!src||!confirm('حذف المزوّد «'+src.name+'» نهائياً؟'))return;
+  try{await api('/api/admin/extra/source/'+src.id,{method:'DELETE'});currentSource=null;notice('حُذف المزوّد');await refreshAll()}catch(e){notice(e.message)}
+ });
  $$('[data-edit-source]').forEach(x=>x.onclick=()=>chooseSource(x.dataset.editSource,true));
  $$('[data-inspect-source]').forEach(x=>x.onclick=()=>{chooseSource(x.dataset.inspectSource,true);inspectSource()});
 }
@@ -221,6 +226,20 @@ async function setup(){
  $$('[data-section]').forEach(b=>b.onclick=()=>switchTo(b.dataset.section));
  $$('[data-goto]').forEach(b=>b.onclick=()=>switchTo(b.dataset.goto));
  $$('[data-source-filter]').forEach(b=>b.onclick=()=>{sourceFilter=b.dataset.sourceFilter;$$('[data-source-filter]').forEach(x=>x.classList.toggle('active',x===b));renderSources()});
+ $('#xtream-reload').onclick=()=>loadXtreamAccounts().catch(e=>notice(e.message));
+ $('#xtream-create-form').onsubmit=async e=>{
+  e.preventDefault();const form=e.target,button=form.querySelector('button[type=submit]');
+  button.disabled=true;const result=$('#xtream-result');
+  try{
+   const data=formObject(form);
+   data.duration_days=Number(data.duration_days);data.max_connections=Number(data.max_connections);
+   data.source_ids=[...$('#xtream-source-ids').selectedOptions].map(x=>x.value);
+   const created=await api('/api/admin/xtream-accounts',{method:'POST',body:JSON.stringify(data)});
+   result.textContent='نجاح • '+created.item.username+' • انتهاء '+new Date(created.item.expires_at).toLocaleString('ar-IQ')+
+    ' • رابط Xtream: '+(created.server_url||location.origin)+' • احتفظ بكلمة المرور التي أنشأتها.';
+   form.reset();await loadXtreamAccounts();
+  }catch(e){fail(e,result)}finally{button.disabled=false}
+ };
  $('#ctrl-reload').onclick=()=>refreshAll();$('#ctrl-logout').onclick=logout;
  $('#jump-add-source').onclick=()=>$('#add-source-panel').scrollIntoView({behavior:'smooth'});
  $('#catalog-reload').onclick=refreshAll;$('#catalog-search').oninput=renderCatalog;$('#catalog-type').onchange=renderCatalog;
