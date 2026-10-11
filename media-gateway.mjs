@@ -76,7 +76,7 @@ function allowedMediaUrl(value,source,{redirect=false}={}){
   error('تحويل بث إلى HTTP غير آمن',403);
  return result.toString();
 }
-async function requestMedia(upstream,source,{range,fetcher=fetch,resolver=lookup,trustedAsset=false}={}){
+export async function requestMedia(upstream,source,{range,fetcher=fetch,resolver=lookup,trustedAsset=false}={}){
  let target=allowedMediaUrl(upstream,source,{redirect:trustedAsset}),hops=0;
  const headers={'user-agent':'AKKAD-TV/1.0','accept':'*/*'};
  if(range&&/^bytes=\d+-\d*$/.test(range))headers.range=range;
