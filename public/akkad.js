@@ -11,6 +11,9 @@ let currentSession=null;
 let freeSourceCode=sessionStorage.getItem('akkad_free_source')||'';
 let currentHls=null;
 let catalog=[];
+let loginByCode=false,activeSourceId='',sourceOptions=[];
+const pageState={live:{loaded:0,hasMore:false,total:0},movie:{loaded:0,hasMore:false,total:0},series:{loaded:0,hasMore:false,total:0}};
+let savedCodes=[];try{savedCodes=JSON.parse(sessionStorage.getItem('akkad_account_codes')||'[]').filter(x=>/^[A-Z0-9]{2,12}$/.test(x)).slice(0,30)}catch{}
 let playbackRequest=0,catalogRequest=0;
 let playerTarget='watch';
 const selectedCategories={};
@@ -67,14 +70,14 @@ async function login(form){
   currentSession=await api('/api/session');
   return data;
 }
-function logout(){hideWatch();catalogRequest++;catalog=[];if(mode==='tv'){['live','movie','series','anime'].forEach(k=>renderCatalog(k));$('#tv-featured').replaceChildren();}freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');if(mode==='tv')refreshUser();notice('تم تسجيل الخروج');}
+function logout(){hideWatch();catalogRequest++;catalog=[];if(mode==='tv'){['live','movie','series'].forEach(k=>renderCatalog(k));$('#tv-featured').replaceChildren();}freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');if(mode==='tv')refreshUser();notice('تم تسجيل الخروج');}
 function openTv(section,record=true){
   if(!$('[data-tv-section="'+section+'"]'))return;
   document.body.dataset.section=section;hideWatch();
   if(record&&location.hash!=='#'+section)history.pushState({section},'', '#'+section);
   $$('.tv-section').forEach(el=>el.classList.toggle('active',el.dataset.tvSection===section));
   $$('[data-tv-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tvTab===section));
-  if(['movie','series','anime','live'].includes(section))renderCatalog(section);
+  if(['movie','series','live'].includes(section))renderCatalog(section);
 }
 function messageBox(message){return '<div class="empty">'+h(message)+'</div>';}
 function getCategories(items){const counts={};for(const item of items){const cat=item.category||'عام';counts[cat]=(counts[cat]||0)+1;}return counts;}
@@ -152,55 +155,75 @@ async function startVideo(url,format){
  }
  video.play().catch(()=>setWatchStatus('اضغط زر تشغيل الفيديو إذا منع المتصفح التشغيل التلقائي.'));
 }
-async function playItem(id){
- const item=catalog.find(x=>x.id===id);
- if(!item)return notice('المحتوى غير موجود في القائمة');
- if(!token&&!freeSourceCode){$('#tv-login')?.classList.remove('hidden');return notice('سجّل الدخول أو أدخل كود المصدر');}
- if(item.kind==='live'&&document.body.dataset.section!=='live')openTv('live');
- hideWatch();const request=++playbackRequest;
- playerTarget=item.kind==='live'?'live':'watch';
- if(playerTarget==='live'){
-  $('#live-title').textContent=item.title;
-  $$('#live-channels [data-play]').forEach(b=>b.classList.toggle('active',b.dataset.play===id));
-  setWatchStatus('جارٍ تحميل القناة…');
- }else displayWatch(item.title,'جارٍ تحميل بيانات التشغيل من المصدر...');
- try{
-  const route=freeSourceCode?'/api/free/'+encodeURIComponent(freeSourceCode):'/api';
-  if(item.kind==='series'){
-    const result=await api(route+'/episodes/'+encodeURIComponent(id));
-    if(request!==playbackRequest)return;
-    const root=$('#watch-episodes');root.classList.remove('hidden');
-    const seasons=result.seasons||[];
-    let episodes=0;
-    for(const season of seasons){
-      const h3=document.createElement('h3');h3.textContent='الموسم '+season.season;root.append(h3);
-      for(const episode of season.episodes||[]){
-        const b=document.createElement('button');b.className='watch-episode';b.textContent=episode.title||('الحلقة '+episode.episode_num);
-        b.onclick=()=>{setWatchStatus('جارٍ تشغيل '+b.textContent+'...');startVideo(episode.url,episode.format==='m3u8'?'hls':(episode.format||'mp4'))};
-        root.append(b);episodes++;
-      }
-    }
-    setWatchStatus(episodes?'اختر حلقة لبدء المشاهدة. عدد الحلقات: '+episodes:'لا توجد حلقات متاحة من حساب Xtream');
-  }else{
-    const result=await api(route+'/watch/'+encodeURIComponent(id));
-    if(request!==playbackRequest)return;
-    setWatchStatus('المصدر: '+result.label+' • '+(result.format==='hls'?'HLS':result.format?.toUpperCase()||'تلقائي'));
-    await startVideo(result.url,result.format);
-  }
- }catch(e){if(request!==playbackRequest)return;setWatchStatus('تعذر التشغيل: '+e.message);notice(e.message)}
-}
 
-async function loadCatalog(){
- const request=++catalogRequest;
- if(!token&&!freeSourceCode){catalog=[];$('#tv-featured').innerHTML=messageBox('سجّل الدخول بحساب أنشأته الإدارة، أو أدخل كود مصدر مجاني لعرض المحتوى المتاح.');return;}
+function instantBase(){return freeSourceCode?'/api/instant/free/'+encodeURIComponent(freeSourceCode):'/api/instant/vip'}
+async function playItem(id){
+ const item=catalog.find(x=>x.id===id);if(!item)return notice('العمل غير موجود');
+ if(!token&&!freeSourceCode){$('#tv-login').classList.remove('hidden');return;}
+ if(item.kind==='live'&&document.body.dataset.section!=='live')openTv('live');
+ hideWatch();const request=++playbackRequest;playerTarget=item.kind==='live'?'live':'watch';
+ if(item.kind==='live'){$('#live-title').textContent=item.title;setWatchStatus('جارٍ تحميل القناة…')}
+ else displayWatch(item.title,'جارٍ جلب الحلقات أو المشغل...');
  try{
-  const data=freeSourceCode?await api('/api/free/'+encodeURIComponent(freeSourceCode)+'/catalog'):await api('/api/catalog');
+  const [source,kind,external]=String(item.id).split(':');
+  if(!source||!kind||!external)throw Error('معرف المحتوى غير صالح');
+  const query=new URLSearchParams({source,kind,id:external});
+  if(item.container_extension)query.set('ext',item.container_extension);
+  const result=await api(instantBase()+(kind==='series'?'/episodes':'/watch')+'?'+query);
+  if(request!==playbackRequest)return;
+  if(kind==='series'){
+   let count=0;const root=$('#watch-episodes');root.classList.remove('hidden');
+   for(const season of result.seasons||[]){
+    const header=document.createElement('h3');header.textContent='الموسم '+season.season;root.append(header);
+    for(const ep of season.episodes||[]){
+     const b=document.createElement('button');b.className='watch-episode';b.textContent=ep.title||'حلقة';
+     b.onclick=()=>{setWatchStatus('جارٍ تشغيل '+b.textContent);startVideo(ep.url,ep.format==='m3u8'?'hls':ep.format)};root.append(b);count++;
+    }
+   }setWatchStatus(count?'اختر حلقة • العدد: '+count:'لم يرجع المصدر حلقات');
+  }else{
+   setWatchStatus('المصدر: '+result.label);await startVideo(result.url,result.format);
+  }
+ }catch(e){if(request!==playbackRequest)return;setWatchStatus('تعذّر التشغيل: '+e.message);notice(e.message)}
+}
+async function loadSourceOptions(){
+ if(!token&&!freeSourceCode)return;
+ const result=await api(instantBase()+'/sources');
+ sourceOptions=result.sources||[];
+ const sel=$('#playlist-source');sel.replaceChildren();
+ if(token){
+  const all=document.createElement('option');all.value='';all.textContent='جميع المزودين (VIP)';sel.append(all);
+  for(const s of sourceOptions){const o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.append(o)}
+ }
+ for(const code of savedCodes){const o=document.createElement('option');o.value='code:'+code;o.textContent='حساب الكود '+code;sel.append(o)}
+ sel.value=freeSourceCode?'code:'+freeSourceCode:activeSourceId;
+ $('#playlist-sources-info').textContent='المزودون: '+sourceOptions.length+' • الأكواد المضافة: '+savedCodes.length;
+}
+async function loadPage(kind,offset=0,request=catalogRequest){
+ const q=new URLSearchParams({kind,offset:String(offset),limit:'150'});
+ if(!freeSourceCode&&activeSourceId)q.set('source',activeSourceId);
+ const data=await api(instantBase()+'/catalog?'+q);if(request!==catalogRequest)return;
+ if(offset===0)catalog=catalog.filter(x=>x.kind!==kind);
+ const ids=new Set(catalog.map(x=>x.id));
+ const news=(data.items||[]).filter(x=>!ids.has(x.id));catalog.push(...news);
+ pageState[kind]={loaded:offset+(data.items||[]).length,hasMore:data.has_more===true,total:data.total||0};
+ const button=$('#more-'+kind);if(button)button.classList.toggle('hidden',!pageState[kind].hasMore);
+ renderCatalog(kind);
+ const count=$('#count-'+kind);if(count)count.textContent=pageState[kind].total+' عنصر';
+}
+async function loadCatalog(){
+ const request=++catalogRequest;catalog=[];
+ if(!token&&!freeSourceCode){
+  $('#tv-featured').innerHTML=messageBox('أدخل كود الحساب أو سجّل VIP لعرض المحتوى.');
+  for(const kind of ['live','movie','series'])renderCatalog(kind);return;
+ }
+ try{
+  await loadSourceOptions();if(request!==catalogRequest)return;
+  const result=await Promise.allSettled(['live','movie','series'].map(x=>loadPage(x,0,request)));
   if(request!==catalogRequest)return;
-  catalog=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);
-  $('#tv-featured').innerHTML=catalog.length?catalog.slice(0,5).map(cardHtml).join(''):messageBox('مكتبة أكّد قيد التجهيز. المحتوى هنا حقيقي ويتزامن مع لوحة الإدارة.');
+  $('#tv-featured').innerHTML=catalog.length?catalog.slice(0,5).map(cardHtml).join(''):messageBox('لا يوجد محتوى متاح أو تعذّر تحميله');
   $$('#tv-featured [data-play]').forEach(el=>el.onclick=()=>playItem(el.dataset.play));
-  ['live','movie','series','anime'].forEach(k=>renderCatalog(k));
- }catch(e){if(request!==catalogRequest)return;notice('تعذّر جلب المكتبة: '+e.message);$('#tv-featured').innerHTML=messageBox('الخادم غير مهيأ أو مكتبة المحتوى غير متاحة');}
+  const failed=result.find(x=>x.status==='rejected');if(failed)notice('خطأ بجلب بعض القوائم: '+failed.reason.message);
+ }catch(e){if(request!==catalogRequest)return;notice(e.message);$('#tv-featured').innerHTML=messageBox(e.message)}
 }
 function refreshUser(){
  const t=$('#account-status'),p=$('#playlist-account');
@@ -244,7 +267,7 @@ async function initTv(){
  };
 
  $$('[data-tv-tab]').forEach(el=>el.addEventListener('click',()=>openTv(el.dataset.tvTab)));
- $('#tv-search').addEventListener('input',()=>['live','movie','series','anime'].forEach(k=>renderCatalog(k)));
+ $('#tv-search').addEventListener('input',()=>['live','movie','series'].forEach(k=>renderCatalog(k)));
  $('#tv-user').onclick=()=>{if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else openTv('playlist');};
  $('#tv-guest').onclick=()=>{$('#tv-login').classList.add('hidden');notice('هذه معاينة، التشغيل يحتاج حساباً واشتراكاً');};
  $('#tv-login-form').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{
