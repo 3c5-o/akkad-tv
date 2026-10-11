@@ -101,6 +101,14 @@ async function route(req,res) {
   if(p.startsWith('/api/admin/extra/') || /^\/api\/free\/[A-Z0-9]{2,12}\/catalog$/.test(p))
     return adminExtras({req,res,p,json,auth,apiRequest,readBody});
   if(req.method==='GET' && (p==='/'||p==='/tv'||p==='/admin')) return serveFile(res,p==='/admin'?'admin.html':'tv.html');
+  if(req.method==='GET' && p==='/mpegts.min.js') {
+    try{
+      const data=await fs.readFile(path.join(root,'node_modules','mpegts.js','dist','mpegts.min.js'));
+      res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});
+      res.end(data);
+    }catch{return json(res,503,{error:'MPEG-TS player not installed'});}
+    return;
+  }
   if(req.method==='GET' && p==='/hls.min.js') {
     try{const data=await fs.readFile(path.join(root,'node_modules','hls.js','dist','hls.min.js'));
       res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});res.end(data);
