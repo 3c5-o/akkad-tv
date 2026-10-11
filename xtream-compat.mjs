@@ -146,15 +146,15 @@ export async function xtreamCompat({req,res,p,url,apiRequest,json,handleMedia}){
  }
  res.writeHead(200,{'content-type':'audio/x-mpegurl; charset=utf-8','cache-control':'private, no-store',
   'content-disposition':'attachment; filename="akkad.m3u"','x-content-type-options':'nosniff'});
- res.write('#EXTM3U\\n');
+ res.write('#EXTM3U\n');
  for(const {kind,items,mapped} of bundles){
   for(const x of items){
    const alias=mapped.get(x.source_id+':'+kind+':'+x.external_id);if(!alias)continue;
    const ext=kind==='live'?output:cleanExt(x.container_extension);
    const link=new URL(streamPath(kind,username,password,alias,ext),publicBase());
-   const group=String(x.category||'عام').replace(/["\\r\\n]/g,'');
-   const title=String(x.title).replace(/[\\r\\n]/g,' ');
-   res.write('#EXTINF:-1 group-title="'+group+'",'+title+'\\n'+link+'\\n');
+   const group=String(x.category||'عام').replace(/["\r\n]/g,'');
+   const title=String(x.title).replace(/[\r\n]/g,' ');
+   res.write('#EXTINF:-1 group-title="'+group+'",'+title+'\n'+link+'\n');
   }
  }
  res.end();return true;
