@@ -145,10 +145,18 @@ public final class TvActivity extends Activity {
         MediaItem.Builder item = new MediaItem.Builder().setUri(media);
         if ("hls".equalsIgnoreCase(format) || "m3u8".equalsIgnoreCase(format))
             item.setMimeType(MimeTypes.APPLICATION_M3U8);
+        else if ("ts".equalsIgnoreCase(format)) item.setMimeType(MimeTypes.VIDEO_MP2T);
         player.setMediaItem(item.build());
         player.addListener(new Player.Listener() {
             @Override
             public void onPlayerError(PlaybackException error) {
+                if ("hls".equalsIgnoreCase(format)
+                    && !"ts".equalsIgnoreCase(media.getQueryParameter("format"))) {
+                    Toast.makeText(TvActivity.this, "جارٍ تجربة بث TS البديل…", Toast.LENGTH_SHORT).show();
+                    Uri fallback = media.buildUpon().appendQueryParameter("format", "ts").build();
+                    playerView.post(() -> showNativePlayer(fallback, "ts"));
+                    return;
+                }
                 Toast.makeText(TvActivity.this,
                     "تعذر تشغيل البث: " + error.getErrorCodeName(), Toast.LENGTH_LONG).show();
             }
