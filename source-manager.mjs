@@ -12,7 +12,7 @@ export function publicAddress(ip){
 }
 export function validateEndpoint(value,allowlist,{query=false,host=null,allowHttp=false}={}){
  let u;try{u=new URL(value);}catch{throw error('رابط المصدر غير صالح');}
- const allowed=String(allowlist||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
+ const allowed=(String(allowlist||'')+','+String(process.env.AKKAD_EXTRA_ALLOWED_SOURCE_HOSTS||'')).toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
  const literalIP=net.isIP(u.hostname);
  const permittedProtocol=u.protocol==='https:'||(allowHttp===true&&u.protocol==='http:');
  const safeHost=literalIP?literalIP===4&&publicAddress(u.hostname):u.hostname.includes('.')&&!u.hostname.endsWith('.local')&&u.hostname!=='localhost';
