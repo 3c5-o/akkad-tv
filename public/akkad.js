@@ -133,7 +133,15 @@ function displayWatch(title,message=''){
 function setWatchStatus(status){$(playerTarget==='live'?'#live-status':'#watch-message').textContent=status;}
 async function startVideo(url,format){
  if(currentHls){currentHls.destroy();currentHls=null}
- const element=$(playerTarget==='live'?'#live-player':'#watch-video');
+ // Android TV: use the native Media3 player for HLS, MP4 and MKV streams.
+  if(window.AkkadAndroid && typeof window.AkkadAndroid.playMedia==='function'){
+    setWatchStatus('جارٍ فتح المشغل الأصلي…');
+    try{
+      window.AkkadAndroid.playMedia(new URL(url,location.origin).href,String(format||''),$('#watch-title')?.textContent||$('#live-title')?.textContent||'أكّد');
+      return;
+    }catch(error){setWatchStatus('تعذر فتح المشغل الأصلي: '+error.message);}
+  }
+  const element=$(playerTarget==='live'?'#live-player':'#watch-video');
  const oldVideo=element.querySelector('video');if(oldVideo){oldVideo.pause();oldVideo.removeAttribute('src');oldVideo.load();}element.replaceChildren();
  const video=document.createElement('video');video.controls=true;video.playsInline=true;video.autoplay=true;
  video.preload='metadata';video.setAttribute('aria-label','مشغل أكّد');
