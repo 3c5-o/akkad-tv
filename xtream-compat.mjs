@@ -16,7 +16,26 @@ const streamPath=(kind,user,password,id,ext)=>'/'+(kind==='movie'?'movie':kind==
 
 export async function xtreamCompat({req,res,p,url,apiRequest,json,handleMedia}){
  if(p!=='/player_api.php'&&p!=='/get.php'&&!/^\/(live|movie|series)\//.test(p))return false;
- if(req.method!=='GET')throw failure('طريقة غير مدعومة',405);
+ if(!['GET','POST'].includes(req.method))throw failure('طريقة غير مدعومة',405);
+ if(req.method==='POST'){
+  // Legacy IPTV players frequently send form-encoded POST rather than GET.
+  // Accept form or JSON without ever including credentials in logs.
+  const parts=[];let size=0;
+  for await(const chunk of req){size+=chunk.length;if(size>8192)throw failure('بيانات الدخول كبيرة جداً',413);parts.push(chunk);}
+  const raw=Buffer.concat(parts).toString('utf8');
+  let form;
+  const type=String(req.headers['content-type']||'').toLowerCase();
+  if(type.includes('application/json')){
+   try{const obj=JSON.parse(raw||'{}');form=new URLSearchParams();
+    for(const key of ['username','password','action','category_id','series_id','vod_id','output','type']){
+     if(typeof obj[key]==='string'||typeof obj[key]==='number')form.set(key,String(obj[key]));
+    }
+   }catch{throw failure('بيانات طلب Xtream غير مفهومة')}
+  }else form=new URLSearchParams(raw);
+  for(const key of ['username','password','action','category_id','series_id','vod_id','output','type']){
+   if(form.has(key)&&!url.searchParams.has(key))url.searchParams.set(key,form.get(key));
+  }
+ }
  const role=process.env.SUPABASE_SERVICE_ROLE_KEY;
  if(!role||!process.env.AKKAD_SOURCE_ENCRYPTION_KEY)throw failure('بوابة Xtream غير مهيأة',503);
  const db=(table,tail='',method='GET',body,extraHeaders={})=>apiRequest('/rest/v1/akkad_'+table+tail,{
