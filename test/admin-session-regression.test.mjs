@@ -88,3 +88,29 @@ test('Android control keeps portrait screen and encrypted session bridge',async(
  assert.match(manifest,/screenOrientation="portrait"/);
  assert.match(admin,/admin-retry-connection/);
 });
+
+test('expired JWT plus temporary refresh-server outage does not force logout',async()=>{
+ const fixture=createFixture({
+  stored:{akkad_admin_access_v2:'expired',akkad_admin_refresh_v2:'valid-refresh'},
+  fetchFn:async(route)=>route==='/api/auth/refresh'
+    ?response(503,{error:'temporarily unavailable'})
+    :response(401,{error:'jwt expired'})
+ });
+ await assert.rejects(fixture.api('/api/admin/catalog'),/مؤقتاً/);
+ assert.equal(fixture.store.get('akkad_admin_refresh_v2'),'valid-refresh');
+ assert.equal(fixture.store.get('akkad_admin_access_v2'),'expired');
+});
+test('permission denial does not erase the admin session',async()=>{
+ const fixture=createFixture({
+  stored:{akkad_admin_access_v2:'valid',akkad_admin_refresh_v2:'refresh'},
+  fetchFn:async()=>response(403,{error:'صلاحية المدير الأساسي مطلوبة'})
+ });
+ await assert.rejects(fixture.api('/api/admin/viewers'),/صلاحية/);
+ assert.equal(fixture.store.get('akkad_admin_refresh_v2'),'refresh');
+});
+test('all direct admin element references exist in the HTML',async()=>{
+ const html=await readFile(new URL('../public/admin.html',import.meta.url),'utf8');
+ const ids=new Set([...html.matchAll(/\\bid="([^"]+)"/g)].map(x=>x[1]));
+ const refs=[...original.matchAll(/\\$\\(['"]#([A-Za-z0-9_-]+)['"]\\)/g)].map(x=>x[1]);
+ for(const id of refs)assert.ok(ids.has(id),'Admin HTML is missing #'+id);
+});
