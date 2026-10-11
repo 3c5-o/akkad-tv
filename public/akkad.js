@@ -12,6 +12,8 @@ let freeSourceCode=sessionStorage.getItem('akkad_free_source')||'';
 let currentHls=null;
 let catalog=[];
 let playbackRequest=0,catalogRequest=0;
+let playerTarget='watch';
+const selectedCategories={};
 const records={};
 function notice(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.classList.remove('show'),4700);}
 function h(text){return String(text??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -66,9 +68,10 @@ async function login(form){
   return data;
 }
 function logout(){hideWatch();catalogRequest++;catalog=[];if(mode==='tv'){['live','movie','series','anime'].forEach(k=>renderCatalog(k));$('#tv-featured').replaceChildren();}freeSourceCode='';sessionStorage.removeItem('akkad_free_source');token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);if(mode==='admin')$('#admin-login')?.classList.remove('hidden');else $('#tv-login')?.classList.remove('hidden');if(mode==='tv')refreshUser();notice('تم تسجيل الخروج');}
-function openTv(section){
+function openTv(section,record=true){
   if(!$('[data-tv-section="'+section+'"]'))return;
   document.body.dataset.section=section;hideWatch();
+  if(record&&location.hash!=='#'+section)history.pushState({section},'', '#'+section);
   $$('.tv-section').forEach(el=>el.classList.toggle('active',el.dataset.tvSection===section));
   $$('[data-tv-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tvTab===section));
   if(['movie','series','anime','live'].includes(section))renderCatalog(section);
@@ -80,7 +83,8 @@ function cardHtml(item){
   const image=thumb(item.poster_url);
   return '<button class="poster" data-play="'+h(item.id)+'"><div class="poster-cover">'+(image?'<img loading="lazy" alt="" src="'+h(image)+'"/>':'◉')+'</div><div class="poster-name">'+h(item.title)+'</div></button>';
 }
-function renderCatalog(kind,category='الكل'){
+function renderCatalog(kind,category=selectedCategories[kind]||'الكل'){
+ selectedCategories[kind]=category;
  if(kind==='live'){
    const items=itemsOf('live');
    const cats=getCategories(items);
@@ -105,10 +109,17 @@ function renderCatalog(kind,category='الكل'){
  $$('#grid-'+kind+' [data-play]').forEach(el=>el.onclick=()=>playItem(el.dataset.play));
 }
 function hideWatch(){
- playbackRequest++; 
- if(currentHls){currentHls.destroy();currentHls=null}
- const el=$('#watch-video');if(el){const video=el.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}el.replaceChildren()}
+ playbackRequest++;
+ if(currentHls){currentHls.destroy();currentHls=null;}
+ for(const selector of ['#watch-video','#live-player']){
+  const el=$(selector);if(!el)continue;
+  const video=el.querySelector('video');
+  if(video){video.pause();video.removeAttribute('src');video.load();}
+  el.replaceChildren();
+ }
+ if($('#live-player'))$('#live-player').innerHTML='<span class="muted">اختر قناة لبدء التشغيل</span>';
  $('#tv-watch-modal')?.classList.add('hidden');
+ playerTarget='watch';
 }
 function displayWatch(title,message=''){
  $('#tv-watch-modal')?.classList.remove('hidden');
@@ -116,10 +127,10 @@ function displayWatch(title,message=''){
  $('#watch-message').textContent=message;
  const episodes=$('#watch-episodes');episodes.replaceChildren();episodes.classList.add('hidden');
 }
-function setWatchStatus(status){$('#watch-message').textContent=status;}
+function setWatchStatus(status){$(playerTarget==='live'?'#live-status':'#watch-message').textContent=status;}
 async function startVideo(url,format){
  if(currentHls){currentHls.destroy();currentHls=null}
- const element=$('#watch-video');
+ const element=$(playerTarget==='live'?'#live-player':'#watch-video');
  const oldVideo=element.querySelector('video');if(oldVideo){oldVideo.pause();oldVideo.removeAttribute('src');oldVideo.load();}element.replaceChildren();
  const video=document.createElement('video');video.controls=true;video.playsInline=true;video.autoplay=true;
  video.preload='metadata';video.setAttribute('aria-label','مشغل أكّد');
@@ -145,8 +156,14 @@ async function playItem(id){
  const item=catalog.find(x=>x.id===id);
  if(!item)return notice('المحتوى غير موجود في القائمة');
  if(!token&&!freeSourceCode){$('#tv-login')?.classList.remove('hidden');return notice('سجّل الدخول أو أدخل كود المصدر');}
+ if(item.kind==='live'&&document.body.dataset.section!=='live')openTv('live');
  hideWatch();const request=++playbackRequest;
- displayWatch(item.title,'جارٍ تحميل بيانات التشغيل من المصدر...');
+ playerTarget=item.kind==='live'?'live':'watch';
+ if(playerTarget==='live'){
+  $('#live-title').textContent=item.title;
+  $$('#live-channels [data-play]').forEach(b=>b.classList.toggle('active',b.dataset.play===id));
+  setWatchStatus('جارٍ تحميل القناة…');
+ }else displayWatch(item.title,'جارٍ تحميل بيانات التشغيل من المصدر...');
  try{
   const route=freeSourceCode?'/api/free/'+encodeURIComponent(freeSourceCode):'/api';
   if(item.kind==='series'){
@@ -188,19 +205,35 @@ async function loadCatalog(){
 function refreshUser(){
  const t=$('#account-status'),p=$('#playlist-account');
  if(!currentSession){if(t)t.textContent=freeSourceCode?'مصدر مجاني: '+freeSourceCode:'معاينة — يلزم حساب VIP';if(p)p.textContent=freeSourceCode?'المصدر المجاني: '+freeSourceCode:'لم يتم تسجيل الدخول';return;}
- const sub=currentSession.subscriptions?.find(s=>s.status==='active'&&new Date(s.ends_at)>new Date());
+ const sub=currentSession.subscriptions?.find(s=>s.status==='active'&&new Date(s.ends_at)>new Date()&&new Date(s.starts_at)<=new Date());
  const status=sub?'VIP فعّال حتى '+new Date(sub.ends_at).toLocaleDateString('ar-IQ'):'لا يوجد اشتراك نشط';
  if(t)t.textContent=status;if(p)p.textContent=(currentSession.username||'المشاهد')+' — '+status;
 }
+async function fullscreen(element){
+ try{if(element?.requestFullscreen)await element.requestFullscreen();else if(element?.webkitEnterFullscreen)element.webkitEnterFullscreen();else notice('ملء الشاشة غير مدعوم على هذا الجهاز');}catch{notice('تعذر فتح ملء الشاشة');}
+}
+function moveFocus(event){
+ if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;
+ const current=document.activeElement;
+ if(current?.matches('input,textarea,select,video'))return;
+ const scope=!$('#tv-login').classList.contains('hidden')?$('#tv-login'):!$('#tv-watch-modal').classList.contains('hidden')?$('#tv-watch-modal'):document;
+ const buttons=$$('button:not(:disabled),input,a[href]',scope).filter(el=>el.getClientRects().length);
+ if(!buttons.length)return;
+ if(!buttons.includes(current)){event.preventDefault();buttons[0].focus();return;}
+ const box=current.getBoundingClientRect(),x=box.x+box.width/2,y=box.y+box.height/2;
+ const horizontal=['ArrowLeft','ArrowRight'].includes(event.key),sign=['ArrowLeft','ArrowUp'].includes(event.key)?-1:1;
+ const candidates=buttons.filter(el=>el!==current).map(el=>{const r=el.getBoundingClientRect(),dx=r.x+r.width/2-x,dy=r.y+r.height/2-y;return {el,forward:(horizontal?dx:dy)*sign,side:Math.abs(horizontal?dy:dx)};}).filter(c=>c.forward>1).sort((a,b)=>(a.forward+a.side*3)-(b.forward+b.side*3));
+ if(candidates.length){event.preventDefault();candidates[0].el.focus();candidates[0].el.scrollIntoView({block:'nearest',inline:'nearest'});}
+}
 async function initTv(){
+ document.addEventListener('keydown',moveFocus);
  document.body.dataset.section='home';
+ window.addEventListener('popstate',()=>openTv(location.hash.slice(1)||'home',false));
  $('#tv-back').onclick=()=>openTv('home');
  window.addEventListener('offline',()=>notice('انقطع اتصال الإنترنت'));
  window.addEventListener('online',()=>{notice('عاد اتصال الإنترنت');loadCatalog();});
  $('#watch-close').onclick=hideWatch;
- $('#watch-fullscreen').onclick=()=>{
-  const video=$('#watch-video video');if(video?.requestFullscreen)video.requestFullscreen();else $('#tv-watch-modal').requestFullscreen?.();
- };
+ $('#watch-fullscreen').onclick=()=>fullscreen($('#watch-video video')||$('#tv-watch-modal')); 
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#tv-watch-modal').classList.contains('hidden'))hideWatch();else openTv('home');}});
 
  $('#tv-use-free').onchange=()=>{
@@ -212,7 +245,7 @@ async function initTv(){
 
  $$('[data-tv-tab]').forEach(el=>el.addEventListener('click',()=>openTv(el.dataset.tvTab)));
  $('#tv-search').addEventListener('input',()=>['live','movie','series','anime'].forEach(k=>renderCatalog(k)));
- $('#tv-user').onclick=()=>{if(!token)$('#tv-login').classList.remove('hidden');else notice(currentSession?.username||'حساب أكّد');};
+ $('#tv-user').onclick=()=>{if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else openTv('playlist');};
  $('#tv-guest').onclick=()=>{$('#tv-login').classList.add('hidden');notice('هذه معاينة، التشغيل يحتاج حساباً واشتراكاً');};
  $('#tv-login-form').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{
     if($('#tv-use-free').checked){
@@ -231,14 +264,15 @@ async function initTv(){
  $('#setting-refresh').onclick=$('#playlist-refresh').onclick=()=>loadCatalog();
  $('#setting-login').onclick=()=>$('#tv-login').classList.remove('hidden');
  $('#setting-logout').onclick=logout;
- $('#setting-theme').onclick=()=>notice('المظهر الذهبي هو التصميم المعتمد');
+ $('#setting-theme').onclick=()=>{const compact=document.body.classList.toggle('compact-view');$('#setting-theme').textContent=compact?'العرض: مضغوط':'العرض: مريح';};
  $('#setting-subtitles').onclick=()=>notice('الترجمة تعتمد على مسارات الفيديو');
- $('#setting-player').onclick=()=>notice('مشغل HTML5 الحالي؛ مشغل Media3 مخصص لتطبيق Android');
- $('#live-fullscreen').onclick=()=>$('#live-player video')?.requestFullscreen?.();
+ $('#setting-player').onclick=()=>fullscreen(document.documentElement);
+ $('#live-fullscreen').onclick=()=>{const video=$('#live-player video');if(video)fullscreen(video);else notice('اختر قناة أولاً');};
  await new Promise(r=>setTimeout(r,2200));$('#splash').classList.add('hidden');
  if(token){try{currentSession=await api('/api/session');}catch{token='';sessionStorage.removeItem(sessionKey);}}
  refreshUser();if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else $('#tv-login').classList.add('hidden');
  await loadCatalog();
+ openTv(location.hash.slice(1)||'home',false);
 }
 const recordTitle={
  sources:r=>r.name+' • '+r.kind,
