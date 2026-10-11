@@ -33,8 +33,9 @@ function logout(){token='';refresh='';session=null;sessionStorage.removeItem(key
 function switchTo(view){
  $$('.ctrl-section').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
  $$('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===view));
- const title={overview:'لوحة التحكم',sources:'مزودو IPTV',catalog:'مكتبة المحتوى',users:'حسابات المشاهدين',activation:'تفعيل الحساب والمدة',plans:'الاشتراكات والباقات',codes:'أكواد VIP',tmdb:'TMDb والمعلومات',settings:'النظام والإعدادات'};
+ const title={overview:'لوحة التحكم',sources:'مزودو IPTV',catalog:'مكتبة المحتوى',users:'حسابات المشاهدين',activation:'تفعيل الحساب والمدة',plans:'الاشتراكات والباقات',codes:'أكواد VIP',xtream:'حسابات Xtream أكّد',tmdb:'TMDb والمعلومات',settings:'النظام والإعدادات'};
  $('#ctrl-title').textContent=title[view]||title.overview;
+ if(view==='xtream')loadXtreamAccounts().catch(e=>notice(e.message));
  if(view==='tmdb')loadTmdb().catch(e=>notice(e.message));
  if(view==='users'||view==='activation')loadViewers().catch(e=>notice(e.message));
  if(view==='settings')loadStatus().catch(e=>notice(e.message));
@@ -46,7 +47,7 @@ async function refreshAll(){
  const names=['sources','catalog','plans','subscriptions','activations'];
  const results=await Promise.allSettled(names.map(x=>api('/api/admin/'+x)));
  for(let i=0;i<names.length;i++){if(results[i].status==='fulfilled')resources[names[i]]=Array.isArray(results[i].value)?results[i].value:[];else notice(names[i]+': '+results[i].reason.message)}
- renderAll();
+ renderAll();renderXtreamSources();
  try{const health=await api('/health');$('#ctrl-health').textContent=health.ok?'خادم أكّد متصل':'الخادم غير متاح';$('#ctrl-health').classList.toggle('ok',health.ok)}
  catch{$('#ctrl-health').textContent='تعذر فحص الخادم'}
 }
@@ -196,6 +197,25 @@ async function loadStatus(){
     '\nTMDb: '+(flags.tmdb_configured?'تمت إضافة المفتاح':'أدخل المفتاح من صفحة TMDb')+
     '\nقائمة نطاقات مزودي IPTV: '+(flags.source_host_allowlist_configured?'مهيأة':'لم تُهيأ');
  }catch(e){$('#system-connection').textContent=e.message}
+}
+function renderXtreamSources(){
+ const el=$('#xtream-source-ids');if(!el)return;
+ const before=new Set([...el.selectedOptions].map(x=>x.value));el.replaceChildren();
+ for(const s of resources.sources.filter(x=>x.kind==='xtream')){
+  const o=document.createElement('option');o.value=s.id;o.textContent=s.name+' • '+statusText(s);o.selected=before.has(s.id);el.append(o);
+ }
+}
+async function loadXtreamAccounts(){
+ const result=await api('/api/admin/xtream-accounts'),list=result.items||[];
+ const actions=x=>'<div class="ctrl-item-actions"><button class="btn small" data-xtoggle="'+safe(x.id)+'">'+(x.active?'إيقاف':'تشغيل')+'</button><button class="btn small" data-xextend="'+safe(x.id)+'">تمديد</button><button class="btn small" data-xpass="'+safe(x.id)+'">تغيير كلمة المرور</button><button class="btn small danger" data-xdelete="'+safe(x.id)+'">حذف</button></div>';
+ $('#xtream-users').innerHTML=list.length?list.map(x=>item(x.username,(x.active?'مفعّل':'موقوف')+' • انتهاء '+new Date(x.expires_at).toLocaleDateString('ar-IQ')+' • الاتصالات '+x.max_connections+' • المصادر '+(x.source_ids?.length||'الكل'),actions(x))).join(''):empty('لا توجد حسابات Xtream خاصة بأكّد');
+ async function mutate(id,method,body){
+  try{await api('/api/admin/xtream-accounts/'+id,{method,...(body?{body:JSON.stringify(body)}:{})});notice('تم تعديل الحساب');await loadXtreamAccounts()}catch(e){notice(e.message)}
+ }
+ $$('[data-xtoggle]').forEach(b=>b.onclick=()=>{const x=list.find(z=>z.id===b.dataset.xtoggle);if(x)mutate(x.id,'PATCH',{active:!x.active})});
+ $$('[data-xextend]').forEach(b=>b.onclick=()=>{const n=Number(prompt('أيام التمديد','30'));if(Number.isInteger(n)&&n>0&&n<=3650)mutate(b.dataset.xextend,'PATCH',{duration_days:n})});
+ $$('[data-xpass]').forEach(b=>b.onclick=()=>{const x=prompt('كلمة مرور جديدة من 8 أحرف أو أكثر');if(x?.length>=8)mutate(b.dataset.xpass,'PATCH',{password:x})});
+ $$('[data-xdelete]').forEach(b=>b.onclick=()=>{if(confirm('حذف هذا الحساب؟'))mutate(b.dataset.xdelete,'DELETE')});
 }
 async function setup(){
  $$('[data-section]').forEach(b=>b.onclick=()=>switchTo(b.dataset.section));
