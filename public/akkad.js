@@ -283,7 +283,7 @@ async function initTv(){
  $$('[data-tv-tab]').forEach(el=>el.addEventListener('click',()=>openTv(el.dataset.tvTab)));
  $('#tv-search').addEventListener('input',()=>['live','movie','series'].forEach(k=>renderCatalog(k)));
  $('#tv-user').onclick=()=>{if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else openTv('playlist');};
- $('#tv-guest').onclick=()=>{$('#tv-login').classList.add('hidden');notice('هذه معاينة، التشغيل يحتاج حساباً واشتراكاً');};
+
  $('#tv-login-form').onsubmit=async e=>{
   e.preventDefault();const button=$('#tv-login-submit');button.disabled=true;
   try{
