@@ -62,30 +62,85 @@ export function xtreamMediaUrl(source,creds,identity,format){
  const relative=[dir,encodeURIComponent(creds.username),encodeURIComponent(creds.password),identity.x+'.'+ext].join('/');
  return new URL(relative,base).toString();
 }
-function allowedMediaUrl(value,source){
+function allowedMediaUrl(value,source,{redirect=false}={}){
  const root=new URL(source.endpoint);
- const result=validateEndpoint(value,process.env.AKKAD_ALLOWED_SOURCE_HOSTS||'',{
-  query:true,host:root.hostname,
-  allowHttp:source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true'
+ const candidate=new URL(value);
+ // Signed media links can redirect to public CDNs, but never to internal networks.
+ // A redirect is only accepted as a response from a validated, allowed IPTV source.
+ const allowHttp=source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true';
+ const result=validateEndpoint(value,redirect?candidate.hostname:(process.env.AKKAD_ALLOWED_SOURCE_HOSTS||''),{
+  query:true,host:redirect?null:root.hostname,allowHttp
  });
- if(result.origin!==root.origin)error('رابط تشغيل بمضيف أو منفذ غير مسموح',403);
+ if(!redirect&&result.origin!==root.origin)error('رابط تشغيل بمضيف أو منفذ غير مسموح',403);
+ if(redirect&&(result.protocol!==root.protocol&&result.protocol==='http:'&&!allowHttp))
+  error('تحويل بث إلى HTTP غير آمن',403);
  return result.toString();
 }
-async function requestMedia(upstream,source,{range}={}){
- const target=allowedMediaUrl(upstream,source),u=new URL(target);
- const ips=net.isIP(u.hostname)===4?[{address:u.hostname}]:await lookup(u.hostname,{all:true}).catch(()=>[]);
- if(!ips.length||ips.some(v=>!publicAddress(v.address)))error('عنوان مزود البث غير آمن',403);
- const headers={'user-agent':'AKKAD-TV/1.0'};
+async function requestMedia(upstream,source,{range,fetcher=fetch,resolver=lookup}={}){
+ let target=allowedMediaUrl(upstream,source),hops=0;
+ const headers={'user-agent':'AKKAD-TV/1.0','accept':'*/*'};
  if(range&&/^bytes=\d+-\d*$/.test(range))headers.range=range;
- try{
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),18000);
+ for(;;){
+  const u=new URL(target);
+  const ips=net.isIP(u.hostname)===4?[{address:u.hostname}]:await resolver(u.hostname,{all:true}).catch(()=>[]);
+  if(!ips.length||ips.some(v=>!publicAddress(v.address)))error('عنوان خادم البث أو التحويل غير آمن',403);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
   let response;
-  try{response=await fetch(target,{redirect:'manual',headers,signal:controller.signal});}
-  finally{clearTimeout(timer)}
-  if(!response.ok)error('رفض المصدر تشغيل الملف (HTTP '+response.status+')',response.status===404?404:502);
-  return {response,upstream:target};
- }catch(e){if(e.status)throw e;error('تعذر الاتصال بخادم تشغيل IPTV',502);}
+  try{response=await fetcher(target,{redirect:'manual',headers,signal:controller.signal});}
+  catch(e){
+   clearTimeout(timer);
+   if(e.status)throw e;
+   error(e.name==='AbortError'?'انتهت مهلة اتصال مزود الفيديو':'تعذر الاتصال بخادم تشغيل IPTV',502);
+  }
+  clearTimeout(timer);
+  if([301,302,303,307,308].includes(response.status)){
+   if(hops++>=5){await response.body?.cancel().catch(()=>{});error('عدد تحويلات المشغل أكبر من المسموح',502);}
+   const location=response.headers.get('location');
+   if(!location){await response.body?.cancel().catch(()=>{});error('أرسل المزود تحويل بث دون وجهة',502);}
+   const next=new URL(location,target).toString();
+   await response.body?.cancel().catch(()=>{});
+   target=allowedMediaUrl(next,source,{redirect:true});
+   continue;
+  }
+  if(!response.ok){
+   await response.body?.cancel().catch(()=>{});
+   error('رفض المصدر تشغيل الملف (HTTP '+response.status+')',response.status===404?404:502);
+  }
+  return {response,upstream:target,redirects:hops};
+ }
+}
+export async function probeSourcePlayback({source,credentials,allowlist,fetcher,lookupFn}){
+ const {collectSource}=await import('./source-manager.mjs');
+ const checks=[];
+ for(const kind of ['live','movie','series']){
+  try{
+   const snapshot=await collectSource(source,credentials,kind,1,allowlist,{allowHttp:source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true'});
+   if(!snapshot.items.length){checks.push({kind,ok:false,reason:'لا توجد عناصر بهذا القسم'});continue;}
+   const first=snapshot.items[0];
+   if(kind==='series'){
+    const {getSeriesInfo}=await import('./source-manager.mjs');
+    const result=await getSeriesInfo(source,credentials,first.external_id,allowlist,{
+      allowHttp:source.allow_insecure_http===true&&process.env.AKKAD_ALLOW_HTTP_SOURCES==='true'});
+    const seasons=Object.values(result.episodes||{});
+    checks.push({kind,ok:seasons.some(x=>Array.isArray(x)&&x.length>0),seasons:seasons.length,
+      episodes:seasons.reduce((a,x)=>a+(Array.isArray(x)?x.length:0),0)});
+    continue;
+   }
+   const extension=first.container_extension||(kind==='live'?'m3u8':'mp4');
+   let target=xtreamMediaUrl(source,credentials,{k:kind,x:first.external_id,ext:extension});
+   let response;
+   try{response=await requestMedia(target,source,{range:'bytes=0-2047',...(fetcher?{fetcher}:{}),...(lookupFn?{resolver:lookupFn}:{})});}
+   catch(e){
+    if(kind!=='live')throw e;
+    target=xtreamMediaUrl(source,credentials,{k:'live',x:first.external_id,ext:'ts'},'ts');
+    response=await requestMedia(target,source,{range:'bytes=0-2047',...(fetcher?{fetcher}:{}),...(lookupFn?{resolver:lookupFn}:{})});
+   }
+   const type=String(response.response.headers.get('content-type')||'application/octet-stream').split(';')[0];
+   await response.response.body?.cancel().catch(()=>{});
+   checks.push({kind,ok:true,format:response.upstream.endsWith('.ts')?'ts':extension,content_type:type,redirects:response.redirects});
+  }catch(e){checks.push({kind,ok:false,reason:String(e.message||'فشل التشغيل').slice(0,220)});}
+ }
+ return checks;
 }
 function rewriteHls(body,base,ticket,source){
  const rewrite=value=>{
