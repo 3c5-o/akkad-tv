@@ -9,7 +9,7 @@ let refreshToken=sessionStorage.getItem(refreshKey)||'';
 let refreshRequest=null;
 let currentSession=null;
 let freeSourceCode=sessionStorage.getItem('akkad_free_source')||'';
-let currentHls=null;
+let currentHls=null,currentMpegts=null;
 let catalog=[];
 let loginByCode=false,activeSourceId='',sourceOptions=[];
 const pageState={live:{loaded:0,hasMore:false,total:0},movie:{loaded:0,hasMore:false,total:0},series:{loaded:0,hasMore:false,total:0}};
@@ -133,6 +133,7 @@ function displayWatch(title,message=''){
 function setWatchStatus(status){$(playerTarget==='live'?'#live-status':'#watch-message').textContent=status;}
 async function startVideo(url,format){
  if(currentHls){currentHls.destroy();currentHls=null}
+ if(currentMpegts){currentMpegts.destroy();currentMpegts=null;}
  // Android TV: use the native Media3 player for HLS, MP4 and MKV streams.
   if(window.AkkadAndroid && typeof window.AkkadAndroid.playMedia==='function'){
     setWatchStatus('جارٍ فتح المشغل الأصلي…');
@@ -151,23 +152,40 @@ async function startVideo(url,format){
  video.addEventListener('error',()=>setWatchStatus('فشل تشغيل الفيديو. قد لا يدعم المتصفح هذه الصيغة أو يكون رابط المزود متوقفاً.'));
  if(format==='hls'&&window.Hls?.isSupported()){
   currentHls=new window.Hls({enableWorker:false,maxBufferLength:25,maxMaxBufferLength:45,liveSyncDurationCount:3,backBufferLength:45});
-  currentHls.loadSource(url);currentHls.attachMedia(video);
+  const instance=currentHls;instance.loadSource(url);instance.attachMedia(video);
   let networkRetries=0,mediaRetries=0;
-  currentHls.on(window.Hls.Events.ERROR,(_event,detail)=>{
-   if(!detail.fatal)return;
-   if(detail.type===window.Hls.ErrorTypes.NETWORK_ERROR&&networkRetries++<2){
-    setWatchStatus('جارٍ إعادة الاتصال بالمزود…');currentHls?.startLoad();return;
+  instance.on(window.Hls.Events.ERROR,(_event,detail)=>{
+   if(!detail.fatal||instance!==currentHls)return;
+   if(detail.type===window.Hls.ErrorTypes.NETWORK_ERROR&&networkRetries++<1){
+    setWatchStatus('جارٍ إعادة الاتصال بالمزود…');instance.startLoad();return;
    }
    if(detail.type===window.Hls.ErrorTypes.MEDIA_ERROR&&mediaRetries++<1){
-    setWatchStatus('محاولة إصلاح توافق ترميز الفيديو…');currentHls?.recoverMediaError();return;
+    setWatchStatus('محاولة إصلاح توافق ترميز الفيديو…');instance.recoverMediaError();return;
    }
-   setWatchStatus('المصدر لم يعمل في هذا المتصفح: '+(detail.details||detail.type));
+   if(playerTarget==='live'){
+    setWatchStatus('صيغة HLS غير متوفرة، جارٍ تجربة TS…');
+    const fallback=url+(url.includes('?')?'&':'?')+'format=ts';
+    startVideo(fallback,'ts');
+    return;
+   }
+   setWatchStatus('المصدر لم يعمل: '+(detail.details||detail.type));
   });
+ }else if(format==='ts'&&window.mpegts?.getFeatureList()?.mseLivePlayback){
+  try{
+   currentMpegts=window.mpegts.createPlayer({type:'mpegts',isLive:playerTarget==='live',url},{
+     enableWorker:false,lazyLoad:false,autoCleanupSourceBuffer:true
+   });
+   currentMpegts.attachMediaElement(video);currentMpegts.load();
+   currentMpegts.on(window.mpegts.Events.ERROR,(_type,detail)=>setWatchStatus('تعذر تشغيل TS: '+String(detail||'ترميز غير مدعوم')));
+   currentMpegts.play().catch(()=>setWatchStatus('اضغط زر التشغيل لبدء بث TS'));
+  }catch(e){setWatchStatus('تعذر تشغيل TS: '+e.message)}
+  return;
  }else{
   video.src=url;
   if(format==='hls'&&!video.canPlayType('application/vnd.apple.mpegurl')){
-   setWatchStatus('هذه الصيغة تحتاج HLS.js أو متصفحاً يدعم HLS');
+   setWatchStatus('هذا المتصفح لا يدعم HLS؛ استخدم تطبيق Android TV');
   }
+  if(format==='ts'&&!video.canPlayType('video/mp2t'))setWatchStatus('بث TS يتطلب متصفحاً يدعم MSE أو تطبيق Android TV');
  }
  video.play().catch(()=>setWatchStatus('اضغط زر تشغيل الفيديو إذا منع المتصفح التشغيل التلقائي.'));
 }
