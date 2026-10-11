@@ -31,7 +31,7 @@ test('redirect to metadata/private IP is never fetched',async()=>{
 test('redirect cycles stop after five attempts',async()=>{
  let count=0;
  const fetcher=async()=>{count++;return new Response(null,{status:302,headers:{location:'/loop'}})};
- await assert.rejects(requestMedia('https://origin.akkad.example/movie/a/123.mp4',source,{fetcher,resolver}),/التحويلات/);
+ await assert.rejects(requestMedia('https://origin.akkad.example/movie/a/123.mp4',source,{fetcher,resolver}),/تحويلات/);
  assert.equal(count,6);
 });
 test('both portrait admin and landscape viewer ship with safe entry points',async()=>{
