@@ -113,3 +113,13 @@ body[data-app=tv] .rotate-hint{display:none}
 @media(max-width:730px){body[data-app=tv] .tv-topbar{flex-wrap:wrap}body[data-app=tv] .tv-tabs{order:3;flex-basis:100%;width:100%}body[data-app=tv] .tv-actions{max-width:none;margin-right:auto}body[data-app=tv] .tv-input{max-width:140px}body[data-app=tv] .hero{min-height:225px}body[data-app=tv] .hero-copy{max-width:70%}body[data-app=tv] .feature-grid{grid-template-columns:repeat(3,1fr)}body[data-app=tv] .info-line{grid-template-columns:1fr}body[data-app=tv] .live-columns{grid-template-columns:1fr 1fr}body[data-app=tv] .live-preview{grid-column:1/-1}body[data-app=tv] .live-list{height:210px}body[data-app=tv] .settings-grid{grid-template-columns:repeat(2,1fr)}body[data-app=tv] .multiview-grid{grid-template-columns:1fr 1fr}}
 @media(orientation:portrait) and (max-width:730px){body[data-app=tv] .rotate-hint{display:flex;position:fixed;inset:0;z-index:250;background:#050c24;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:28px}body[data-app=tv] .rotate-hint .rotate-icon{font-size:4rem;color:#3cc6ff}}
 @media(prefers-reduced-motion:reduce){body[data-app=tv] *{transition:none!important;scroll-behavior:auto!important}}
+
+
+/* Favorite actions do not nest buttons; preserve TV remote focus order. */
+body[data-app=tv] .poster-wrap{position:relative;min-width:0;display:flex}
+body[data-app=tv] .poster-wrap>.poster{width:100%;display:flex;flex-direction:column;text-align:right}
+body[data-app=tv] .poster-wrap .poster-name{width:100%}
+body[data-app=tv] .fav-toggle{position:absolute;top:8px;left:8px;z-index:1;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:#081838dd;color:#effaff;border:1px solid #478bdf;border-radius:10px;font-size:1.4rem;cursor:pointer}
+body[data-app=tv] .fav-toggle.is-fav{color:#85dbff;background:#1247b4e8}
+body[data-app=tv] .fav-toggle:focus-visible{outline:3px solid #52d9ff!important}
+body[data-app=tv] #grid-sports>.live-btn{height:85px;font-size:1rem;background:linear-gradient(135deg,#143b83,#090f28)}
