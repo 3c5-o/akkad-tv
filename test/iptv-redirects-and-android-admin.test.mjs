@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {requestMedia} from '../media-gateway.mjs';
+import {verifySource} from '../source-manager.mjs';
 
 const source={endpoint:'https://origin.akkad.example:443',kind:'xtream',allow_insecure_http:false};
 const resolver=async()=>[{address:'1.1.1.1'}];
@@ -44,4 +45,27 @@ test('both portrait admin and landscape viewer ship with safe entry points',asyn
  assert.match(tv,/mpegts\.min\.js/);
  assert.match(manifest,/screenOrientation="portrait"/);
  assert.match(activity,/FLAG_SECURE/);
+});
+
+test('Xtream validates HTTP URL that redirects to HTTPS on same allowed host',async()=>{
+ const calls=[];
+ const fetcher=async u=>{
+  calls.push(String(u));
+  if(calls.length===1)return new Response(null,{status:301,headers:{location:'https://origin.akkad.example/player_api.php'}});
+  return new Response(JSON.stringify({user_info:{auth:1,status:'Active',exp_date:1999999999,max_connections:1,active_cons:0}}),
+   {status:200,headers:{'content-type':'application/json'}});
+ };
+ const result=await verifySource({kind:'xtream',endpoint:'http://origin.akkad.example:2082'},
+   {username:'test',password:'example'},'origin.akkad.example',{allowHttp:true,lookup:resolver,fetch:fetcher});
+ assert.equal(result.status,'Active');
+ assert.equal(calls.length,2);
+ assert.ok(calls[1].startsWith('https://origin.akkad.example/'));
+});
+
+test('Xtream authentication redirects to other host are blocked to avoid credential disclosure',async()=>{
+ let calls=0;
+ const fetcher=async()=>{calls++;return new Response(null,{status:302,headers:{location:'https://untrusted.akkad.example/api?password=secret'}});};
+ await assert.rejects(verifySource({kind:'xtream',endpoint:'https://origin.akkad.example'},
+  {username:'a',password:'b'},'origin.akkad.example',{lookup:resolver,fetch:fetcher}),/المصدر غير مسموح/);
+ assert.equal(calls,1);
 });
