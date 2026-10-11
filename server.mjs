@@ -186,5 +186,5 @@ async function route(req,res) {
   if(p.startsWith('/api/')) return json(res,404,{error:'Not found'});
   return json(res,404,{error:'Not found'});
 }
-http.createServer(async(req,res)=>{try{await route(req,res);}catch(err){const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:500;console.error('API',req.method,(req.url||'').split('?')[0].replace(/\/(live|movie|series)\/[^/]+\/[^/]+/,'/$1/[redacted]/[redacted]'),status,err.message);json(res,status,{error:status===500?'خطأ داخلي في الخادم':err.message});}}).listen(port,'0.0.0.0',()=>console.log('AKKAD CORE listening on',port));
+http.createServer(async(req,res)=>{try{await route(req,res);}catch(err){const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:500;console.error('API',req.method,(req.url||'').split('?')[0].replace(/\/(live|movie|series)\/[^/]+\/[^/]+/,'/$1/[redacted]/[redacted]').replace(/^\/api\/media\/[^/]+/,'/api/media/[ticket]'),status,err.message);json(res,status,{error:status===500?'خطأ داخلي في الخادم':err.message});}}).listen(port,'0.0.0.0',()=>console.log('AKKAD CORE listening on',port));
 startAutoImport({url:supaUrl,publishableKey:apiKey});
