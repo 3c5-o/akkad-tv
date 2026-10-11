@@ -1,35 +1,101 @@
 (()=>{'use strict';
 const $=s=>document.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
-const key='akkad_session_v1',refreshKey='akkad_refresh_v1';
-let token=sessionStorage.getItem(key)||'',refresh=sessionStorage.getItem(refreshKey)||'',pending=null;
+// Admin sessions are intentionally isolated from the IPTV viewer.
+const key='akkad_admin_access_v2',refreshKey='akkad_admin_refresh_v2',expiresKey='akkad_admin_expiry_v2';
+const readStorage=k=>{try{return sessionStorage.getItem(k)||''}catch{return ''}};
+const writeStorage=(k,v)=>{try{if(v)sessionStorage.setItem(k,String(v));else sessionStorage.removeItem(k)}catch{}};
+const nativeSession=()=>{try{return window.AkkadAdminSession||null}catch{return null}};
+const nativeRefresh=()=>{try{return String(nativeSession()?.getRefreshToken?.()||'')}catch{return ''}};
+const restoreRefresh=()=>nativeRefresh()||readStorage(refreshKey);
+let token=readStorage(key),refresh=restoreRefresh(),expiresAt=Number(readStorage(expiresKey)||0),pending=null;
 let session=null,resources={sources:[],catalog:[],plans:[],subscriptions:[],activations:[]},currentSource=null,sourceFilter='all',viewerState={items:[],offset:0,total:0,search:'',selected:null};
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const notice=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>e.classList.remove('show'),4300)};
+const notice=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>e.classList.remove('show'),5200)};
 function fail(e,target){if(target){target.textContent=e.message;target.classList.add('error')}notice(e.message)}
 function formObject(form){const out=Object.fromEntries(new FormData(form));for(const box of $$('input[type=checkbox]',form))out[box.name]=box.checked;return out}
 function statusText(source){return source.enabled&&source.last_check_status==='ok'?'يعمل':'متوقف'}
+function saveTokens(data){
+ token=String(data?.access_token||'');
+ refresh=String(data?.refresh_token||'');
+ expiresAt=Date.now()+Math.max(0,Number(data?.expires_in||3600)-15)*1000;
+ writeStorage(key,token);writeStorage(refreshKey,refresh);writeStorage(expiresKey,expiresAt);
+ try{nativeSession()?.saveRefreshToken?.(refresh)}catch{}
+}
+function clearCredentials(){
+ token='';refresh='';expiresAt=0;session=null;
+ for(const item of [key,refreshKey,expiresKey])writeStorage(item,'');
+ try{nativeSession()?.clearRefreshToken?.()}catch{}
+}
+function showLogin(message){
+ $('#admin-login').classList.remove('hidden');
+ if(message){const status=$('#admin-login-status');if(status)status.textContent=message;}
+}
+function showConnection(label,connected=false){
+ const status=$('#ctrl-health');if(status){status.textContent=label;status.classList.toggle('ok',connected)}
+ const hint=$('#admin-connection-banner');
+ if(hint){hint.textContent=connected?'':label;hint.classList.toggle('hidden',connected)}
+}
 async function renew(){
- if(!refresh)return false;
- if(!pending)pending=(async()=>{
-  try{const r=await fetch('/api/auth/refresh',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({refresh_token:refresh})});if(!r.ok)throw Error();
-  const d=await r.json();token=d.access_token;refresh=d.refresh_token;sessionStorage.setItem(key,token);sessionStorage.setItem(refreshKey,refresh);return true}
-  catch{token='';refresh='';sessionStorage.removeItem(key);sessionStorage.removeItem(refreshKey);return false}
- })().finally(()=>pending=null);
+ if(pending)return pending;
+ if(!refresh)refresh=restoreRefresh();
+ if(!refresh)return 'invalid';
+ const toRenew=refresh;
+ pending=(async()=>{
+  try{
+   const response=await fetch('/api/auth/refresh',{
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({refresh_token:toRenew}),
+    cache:'no-store'
+   });
+   if(!response.ok){
+    // Do not delete a session on timeout, HTTP 5xx, or temporary network errors.
+    if(response.status===400||response.status===401||response.status===403)return 'invalid';
+    return 'temporary';
+   }
+   const data=await response.json();
+   if(!data.access_token||!data.refresh_token)return 'temporary';
+   saveTokens(data);return 'ok';
+  }catch{return 'temporary'}
+ })().finally(()=>{pending=null});
  return pending;
 }
-async function api(route,options={},retry=false){
- const h={'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})};
- const r=await fetch(route,{...options,headers:{...h,...options.headers}});
- const v=await r.json().catch(()=>({error:'تعذّر قراءة رد الخادم'}));
- if(!r.ok){
-  const msg=String(v.error||v.message||'فشل الاتصال');
-  if(!retry&&/(expired|invalid jwt|invalid claims)/i.test(msg)&&await renew())return api(route,options,true);
-  if(r.status===401&&route!=='/api/auth/login'){logout();throw Error('انتهت الجلسة، سجل دخول الإدارة مجدداً')}
-  throw Error(msg);
+async function api(route,options={},retry=0){
+ const isLogin=route==='/api/auth/login';
+ if(!isLogin&&route!=='/health'&&refresh&&(!token||(expiresAt&&Date.now()>=expiresAt-60000))){
+  const result=await renew();
+  if(result==='temporary'&&!token)throw Error('تعذر الاتصال بالخادم لتجديد الجلسة. حاول بعد قليل');
+  if(result==='invalid'&&!token){clearCredentials();showLogin('انتهت الجلسة، يرجى تسجيل الدخول مجدداً');throw Error('انتهت جلسة الإدارة')}
  }
- return v;
+ const usedToken=token;
+ const headers={'content-type':'application/json',...(usedToken?{authorization:'Bearer '+usedToken}:{})};
+ let response;
+ try{response=await fetch(route,{...options,headers:{...headers,...options.headers},cache:'no-store'})}
+ catch{showConnection('تعذر الوصول إلى الخادم، تحقق من الإنترنت ثم أعد المحاولة');throw Error('فشل اتصال الشبكة، الحساب لم يُسجّل خروجه')}
+ const data=await response.json().catch(()=>({error:'استجابة الخادم غير صالحة'}));
+ if(!response.ok){
+  const message=String(data.error||data.message||'فشل الطلب');
+  if(!isLogin&&response.status===401&&retry<2){
+   // Another request may already have rotated the short-lived JWT.
+   if(token&&token!==usedToken)return api(route,options,retry+1);
+   const result=await renew();
+   if(result==='ok')return api(route,options,retry+1);
+   if(result==='temporary'){showConnection('تعذر تجديد الجلسة بسبب الشبكة. لم يتم تسجيل الخروج');throw Error('تعذر تجديد الجلسة مؤقتاً؛ حاول مجدداً')}
+   clearCredentials();showLogin('انتهت صلاحية جلسة الإدارة، سجل دخولك مجدداً');
+   throw Error('انتهت جلسة الإدارة');
+  }
+  if(!isLogin&&response.status===401&&retry>=2){
+   showConnection('تعذر التحقق من الجلسة مؤقتاً، حاول التحديث');
+   throw Error('فشل التحقق من الجلسة، يرجى إعادة المحاولة');
+  }
+  if(response.status===403)throw Error('ليس لهذا الحساب صلاحية تنفيذ الطلب: '+message);
+  throw Error(message);
+ }
+ return data;
 }
-function logout(){token='';refresh='';session=null;sessionStorage.removeItem(key);sessionStorage.removeItem(refreshKey);$('#admin-login').classList.remove('hidden')}
+function logout(){
+ clearCredentials();
+ showLogin('تم تسجيل الخروج بطلب منك');
+ showConnection('غير مسجل الدخول');
+}
 function switchTo(view){
  $$('.ctrl-section').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
  $$('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===view));
@@ -422,16 +488,55 @@ async function setup(){
  $('#viewer-records').innerHTML=empty('افتح قسم المشاهدين لعرض الحسابات الحالية.');
  $('#admin-login-form').onsubmit=async e=>{
   e.preventDefault();const button=$('button',e.target);button.disabled=true;
+  const status=$('#admin-login-status');if(status)status.textContent='جارٍ التحقق من الحساب…';
   try{
-   const f=formObject(e.target),reply=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:f.email,password:f.password})});
-   token=reply.access_token;refresh=reply.refresh_token||'';sessionStorage.setItem(key,token);sessionStorage.setItem(refreshKey,refresh);
-   session=await api('/api/session');if(session.role==='user')throw Error('هذا الحساب ليس مديراً');
-   $('#ctrl-role').textContent=session.role==='super_admin'?'المدير الأساسي':'مدير';$('#admin-login').classList.add('hidden');await refreshAll();
-  }catch(e){token='';refresh='';sessionStorage.removeItem(key);sessionStorage.removeItem(refreshKey);notice(e.message)}
-  finally{button.disabled=false}
+   const f=formObject(e.target);
+   const reply=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:f.email,password:f.password})});
+   saveTokens(reply);
+   const verified=await api('/api/session');
+   if(verified.role!=='super_admin'&&verified.role!=='admin'){
+    clearCredentials();throw Error('هذا الحساب ليس مديراً في قاعدة بيانات أكّد');
+   }
+   session=verified;
+   $('#ctrl-role').textContent=session.role==='super_admin'?'المدير الأساسي':'مدير';
+   $('#admin-login').classList.add('hidden');if(status)status.textContent='';
+   showConnection('خادم أكّد متصل',true);
+   await refreshAll();
+  }catch(e){
+   if(status)status.textContent=e.message;
+   notice(e.message);
+   // Do not erase valid credentials on a temporary connection failure.
+  }finally{button.disabled=false}
  };
- if(token)try{session=await api('/api/session');if(session.role==='user')throw Error();$('#ctrl-role').textContent=session.role==='super_admin'?'المدير الأساسي':'مدير';await refreshAll();$('#admin-login').classList.add('hidden')}catch{logout()}
- else $('#admin-login').classList.remove('hidden');
+ $('#admin-retry-connection')?.addEventListener('click',()=>restoreAdmin());
+ $('#ctrl-retry')?.addEventListener('click',()=>restoreAdmin());
+ window.addEventListener('online',()=>{showConnection('عاد الإنترنت، جارٍ فحص الاتصال…');restoreAdmin().catch(()=>{})});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session)api('/api/session').then(x=>{if(x.role==='admin'||x.role==='super_admin'){session=x;showConnection('خادم أكّد متصل',true)}}).catch(e=>showConnection('تعذر فحص الجلسة: '+e.message))});
+ async function restoreAdmin(){
+  showConnection('جارٍ الاتصال بخادم أكّد…');
+  if(!refresh)refresh=restoreRefresh();
+  try{
+   const health=await api('/health');
+   if(!health.ok)throw Error('الخادم لا يستجيب بشكل صحيح');
+   if(!token&&refresh){
+    const result=await renew();
+    if(result==='invalid'){clearCredentials();showLogin('انتهت الجلسة، سجل دخول الإدارة مجدداً');showConnection('الخادم متصل، يلزم تسجيل الدخول',true);return}
+    if(result==='temporary'){showConnection('الخادم متصل، تعذر تجديد الجلسة. حاول مجدداً');showLogin('تعذر استعادة الجلسة حالياً، بيانات الحساب محفوظة بأمان');return}
+   }
+   if(!token){showConnection('الخادم متصل، سجّل الدخول',true);showLogin();return}
+   const verified=await api('/api/session');
+   if(verified.role!=='admin'&&verified.role!=='super_admin'){
+    clearCredentials();showLogin('حسابك لا يملك صلاحية الإدارة');return;
+   }
+   session=verified;$('#ctrl-role').textContent=verified.role==='super_admin'?'المدير الأساسي':'مدير';
+   $('#admin-login').classList.add('hidden');
+   showConnection('خادم أكّد متصل',true);await refreshAll();
+  }catch(e){
+   showConnection('الاتصال غير مستقر: '+e.message);
+   if(!session)showLogin('تعذر الاتصال الآن، يمكنك إعادة المحاولة دون فقد الجلسة');
+  }
+ }
+ await restoreAdmin();
 }
 setup().catch(e=>notice(e.message));
 })();
