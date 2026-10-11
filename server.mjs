@@ -91,7 +91,7 @@ async function route(req,res) {
       res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});res.end(data);
     }catch{return json(res,503,{error:'HLS player not installed'});}return;
   }
-  if(req.method==='GET' && ['/tv-gold.css','/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg'].includes(p)) return serveFile(res,p.slice(1));
+  if(req.method==='GET' && ['/tv-gold.css','/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg','/orbit-tv.css','/orbit-tv.js','/orbit-logo.svg'].includes(p)) return serveFile(res,p.slice(1));
   if(req.method==='POST' && p==='/api/auth/login') {
     const body=await readBody(req);
     if(typeof body.email!=='string' || typeof body.password!=='string' || body.password.length>300) return json(res,400,{error:'Invalid credentials'});
