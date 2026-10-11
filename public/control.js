@@ -248,7 +248,7 @@ async function setup(){
    data.duration_days=Number(data.duration_days);data.max_connections=Number(data.max_connections);
    data.source_ids=[...$('#xtream-source-ids').selectedOptions].map(x=>x.value);
    const created=await api('/api/admin/xtream-accounts',{method:'POST',body:JSON.stringify(data)});
-   $('#xtream-server-value').value=String(created.server_url||location.origin).replace(/\\/$/,'');
+   $('#xtream-server-value').value=String(created.server_url||location.origin);
    $('#xtream-user-value').value=created.item.username;
    result.textContent='تم إنشاء حساب Xtream • صالح حتى '+new Date(created.item.expires_at).toLocaleString('ar-IQ')+'. انسخ معلومات الاتصال من الحقول أدناه.';
    await loadXtreamAccounts();
