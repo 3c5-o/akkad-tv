@@ -5,11 +5,13 @@
 <div class="login-shade hidden" id="tv-login"><div class="login-card">
   <div class="logo"><img src="/brand.svg" alt="أكّد"/>أكّد</div>
   <h2>تسجيل الدخول إلى أكّد</h2><p class="muted small">استخدم اسم المستخدم وكلمة المرور اللذين أنشأهما لك مدير المنصة.</p>
-  <form id="tv-login-form"><div class="field"><label>اسم المستخدم</label><input class="input" name="username" required autocomplete="username" placeholder="اسم المستخدم"/></div>
-    <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" required autocomplete="current-password" placeholder="كلمة المرور"/></div>
-    <label class="ctrl-free-check" style="display:flex;align-items:center;gap:10px;text-align:right;color:#ebd3ad"><input id="tv-use-free" type="checkbox"/> لدي كود مصدر مجاني</label>
-    <div id="tv-free-entry" class="field hidden"><label>كود المصدر</label><input class="input" name="source_code" maxlength="12" placeholder="A1" autocomplete="off"/></div>
-    <button class="btn primary" type="submit">دخول إلى أكّد</button></form>
+  <form id="tv-login-form">
+    <div id="tv-credentials-fields"><div class="field"><label>اسم المستخدم</label><input class="input" name="username" required autocomplete="username" placeholder="اسم المستخدم"/></div>
+    <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" required autocomplete="current-password" placeholder="كلمة المرور"/></div></div>
+    <div id="tv-free-entry" class="field hidden"><label>كود المصدر</label><input class="input" name="source_code" maxlength="12" placeholder="A1" autocomplete="off" autocapitalize="characters"/></div>
+    <button class="btn primary" type="submit" id="tv-login-submit">دخول VIP</button>
+    <button class="btn ghost" type="button" id="tv-use-code">الدخول بالكود فقط</button>
+    <button class="btn ghost hidden" type="button" id="tv-use-vip">العودة لتسجيل VIP</button></form>
   <button id="tv-guest" class="btn ghost" type="button">معاينة أقسام التطبيق</button>
   <span class="muted tiny">بث المحتوى يتطلب اشتراكاً نشطاً ومصدراً مرخصاً</span>
 </div></div>
@@ -18,7 +20,7 @@
     <div class="logo"><img src="/brand.svg" alt="أكّد"/><span>أكّد</span></div>
     <nav class="tv-tabs" aria-label="الأقسام الرئيسية">
       <button class="tv-tab active" data-tv-tab="home">الرئيسية</button><button class="tv-tab" data-tv-tab="live">بث مباشر</button>
-      <button class="tv-tab" data-tv-tab="movie">أفلام</button><button class="tv-tab" data-tv-tab="series">مسلسلات</button><button class="tv-tab" data-tv-tab="anime">أنمي</button><button class="tv-tab" data-tv-tab="settings">الإعدادات</button>
+      <button class="tv-tab" data-tv-tab="movie">أفلام</button><button class="tv-tab" data-tv-tab="series">مسلسلات</button><button class="tv-tab" data-tv-tab="settings">الإعدادات</button>
     </nav>
     <div class="tv-actions"><input id="tv-search" class="input tv-input" placeholder="ابحث عن محتوى..." aria-label="بحث"/><button id="tv-user" class="btn small">الحساب</button></div>
   </header>
@@ -29,7 +31,7 @@
       <button data-tv-tab="live" class="side-btn">▣ البث المباشر <span>›</span></button>
       <button data-tv-tab="movie" class="side-btn">◉ الأفلام <span>›</span></button>
       <button data-tv-tab="series" class="side-btn">▣ المسلسلات <span>›</span></button>
-      <button data-tv-tab="anime" class="side-btn">◈ الأنمي <span>›</span></button>
+      
       <button data-tv-tab="playlist" class="side-btn">☷ قائمة التشغيل <span>›</span></button>
       <button data-tv-tab="settings" class="side-btn">⚙ الإعدادات <span>›</span></button>
       <div class="goldline"></div><span id="account-status" class="muted small">حساب تجريبي — لا اشتراك</span>
@@ -39,18 +41,18 @@
         <div class="hero panel"><div><span class="tag">هوية عراقية • تجربة عصرية</span><h1>AKKAD <small>TV</small></h1><p>ترفيه بلا حدود</p><button data-tv-tab="live" class="btn primary">استكشف البث المباشر</button></div><img class="hero-logo" src="/brand.svg" alt="شعار أكّد"/></div>
         <div class="feature-grid">
           <button class="feature" data-tv-tab="live"><span class="icon">▣</span>بث مباشر</button><button class="feature" data-tv-tab="movie"><span class="icon">◉</span>أفلام</button>
-          <button class="feature" data-tv-tab="series"><span class="icon">▤</span>مسلسلات</button><button class="feature" data-tv-tab="anime"><span class="icon">✧</span>أنمي</button>
+          <button class="feature" data-tv-tab="series"><span class="icon">▤</span>مسلسلات</button>
         <button class="feature" data-tv-tab="playlist"><span class="icon">☷</span>قائمة التشغيل</button><button class="feature" data-tv-tab="settings"><span class="icon">⚙</span>الإعدادات</button></div><div class="info-line"><div class="stat">اشتراكات VIP مرنة</div><div class="stat">اختيار مصدر التشغيل المتاح</div><div class="stat">دعم صيَغ متعددة حسب الجهاز</div></div>
         <div class="panel" style="padding:20px;margin-top:18px"><h2 class="gold">أضيف حديثاً</h2><div id="tv-featured" class="poster-grid"></div></div>
       </section>
       <section class="tv-section" data-tv-section="live"><div class="content-header"><h2 class="gold">البث المباشر</h2><span class="tag">قائمة القنوات</span></div>
-        <div class="live-columns"><div class="panel live-list"><h3 class="gold">الفئات</h3><div id="live-categories"></div></div><div class="panel live-list"><h3 class="gold">القنوات</h3><div id="live-channels"></div></div>
+        <div class="live-columns"><div class="panel live-list"><h3 class="gold">الفئات</h3><div id="live-categories"></div></div><div class="panel live-list"><h3 class="gold">القنوات</h3><div id="live-channels"></div><button class="btn small hidden" id="more-live" type="button">تحميل قنوات إضافية</button></div>
           <div class="panel live-preview"><div id="live-player" class="tv-player"><span class="muted">اختر قناة لبدء التشغيل</span></div><div class="player-details"><strong id="live-title" class="gold">أكّد مباشر</strong><p class="note" id="live-status">يتطلب اشتراكاً نشطاً ومصدر بث مرخصاً</p><button class="btn small" id="live-fullscreen">ملء الشاشة</button></div></div></div>
       </section>
-      <section class="tv-section" data-tv-section="movie"><div class="content-header"><h2 class="gold">الأفلام</h2><span id="count-movie" class="tag">0 فيلم</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-movie"></div><div id="grid-movie" class="poster-grid"></div></div></section>
-      <section class="tv-section" data-tv-section="series"><div class="content-header"><h2 class="gold">المسلسلات</h2><span id="count-series" class="tag">0 مسلسل</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-series"></div><div id="grid-series" class="poster-grid"></div></div></section>
-      <section class="tv-section" data-tv-section="anime"><div class="content-header"><h2 class="gold">الأنمي</h2><span id="count-anime" class="tag">0 عمل</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-anime"></div><div id="grid-anime" class="poster-grid"></div></div></section>
-      <section class="tv-section" data-tv-section="playlist"><h2 class="gold">قائمة التشغيل</h2><div class="panel" style="padding:25px;max-width:680px"><p>تتم إدارة قوائم التشغيل المرخصة مركزياً من لوحة أكّد. يمكن للمستخدم مشاهدة المحتوى المتاح ضمن اشتراكه.</p><div id="playlist-account" class="stat">لم تسجّل الدخول بعد</div><p class="note">المحتوى المتاح مرتبط بحسابك أو بكود المصدر الذي أدخلته.</p><button class="btn" id="playlist-refresh">تحديث المحتوى</button></div></section>
+      <section class="tv-section" data-tv-section="movie"><div class="content-header"><h2 class="gold">الأفلام</h2><span id="count-movie" class="tag">0 فيلم</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-movie"></div><div><div id="grid-movie" class="poster-grid"></div><button class="btn small hidden" id="more-movie" type="button">عرض أفلام إضافية</button></div></div></section>
+      <section class="tv-section" data-tv-section="series"><div class="content-header"><h2 class="gold">المسلسلات</h2><span id="count-series" class="tag">0 مسلسل</span></div><div class="catalog-shell"><div class="panel category-list" id="cat-series"></div><div><div id="grid-series" class="poster-grid"></div><button class="btn small hidden" id="more-series" type="button">عرض مسلسلات إضافية</button></div></div></section>
+      
+      <section class="tv-section" data-tv-section="playlist"><h2 class="gold">قائمة التشغيل</h2><div class="panel" style="padding:25px;max-width:680px"><p>تتم إدارة قوائم التشغيل المرخصة مركزياً من لوحة أكّد. يمكن للمستخدم مشاهدة المحتوى المتاح ضمن اشتراكه.</p><div id="playlist-account" class="stat">لم تسجّل الدخول بعد</div><div class="field"><label for="playlist-source">الحساب / المزود النشط</label><select id="playlist-source" class="select"><option value="">جميع المزودين (VIP)</option></select></div><div class="ctrl-actions" style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="playlist-add-account">إضافة حساب بالكود</button><button class="btn ghost" type="button" id="playlist-all-sources">جميع حسابات VIP</button></div><div id="playlist-sources-info" class="note"></div><p class="note">المحتوى المتاح مرتبط بحسابك أو بكود المصدر الذي أدخلته.</p><button class="btn" id="playlist-refresh">تحديث المحتوى</button></div></section>
       <section class="tv-section" data-tv-section="settings"><h2 class="gold">الإعدادات</h2><div class="settings-grid">
         <button class="settings-item" id="setting-refresh">⟳ تحديث المحتوى</button><button class="settings-item" id="setting-login">♙ تسجيل VIP</button><button class="settings-item" id="setting-theme">العرض: مريح</button>
         <button class="settings-item" id="setting-subtitles">▤ الترجمة عبر المشغل</button><button class="settings-item" id="setting-player">ملء شاشة التطبيق</button><button class="settings-item" id="setting-logout">⇥ تسجيل الخروج</button>
