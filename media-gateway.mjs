@@ -76,8 +76,8 @@ function allowedMediaUrl(value,source,{redirect=false}={}){
   error('تحويل بث إلى HTTP غير آمن',403);
  return result.toString();
 }
-async function requestMedia(upstream,source,{range,fetcher=fetch,resolver=lookup}={}){
- let target=allowedMediaUrl(upstream,source),hops=0;
+async function requestMedia(upstream,source,{range,fetcher=fetch,resolver=lookup,trustedAsset=false}={}){
+ let target=allowedMediaUrl(upstream,source,{redirect:trustedAsset}),hops=0;
  const headers={'user-agent':'AKKAD-TV/1.0','accept':'*/*'};
  if(range&&/^bytes=\d+-\d*$/.test(range))headers.range=range;
  for(;;){
@@ -145,7 +145,7 @@ export async function probeSourcePlayback({source,credentials,allowlist,fetcher,
 function rewriteHls(body,base,ticket,source){
  const rewrite=value=>{
   const absolute=new URL(value,base).toString();
-  allowedMediaUrl(absolute,source);
+  allowedMediaUrl(absolute,source,{redirect:true});
   return '/api/media/'+encodeURIComponent(ticket)+'?asset='+encodeURIComponent(sealAsset(absolute));
  };
  return body.split(/\r?\n/).map(line=>{
@@ -229,7 +229,7 @@ export async function handleMedia({req,res,p,url,auth,apiRequest,json}){
  const sealed=(await getPriv('source_credentials','?select=*&source_id=eq.'+info.s))?.[0];
  const creds=decrypt(sealed,process.env.AKKAD_SOURCE_ENCRYPTION_KEY);
  const target=url.searchParams.has('asset')?openAsset(url.searchParams.get('asset')):xtreamMediaUrl(source,creds,info,url.searchParams.get('format'));
- const response=await requestMedia(target,source,{range:req.headers.range});
+ const response=await requestMedia(target,source,{range:req.headers.range,trustedAsset:url.searchParams.has('asset')});
  const r=response.response;
  const isPlaylist=/\.m3u8(?:$|\?)/i.test(response.upstream)||/mpegurl/i.test(r.headers.get('content-type')||'');
  if(isPlaylist){
