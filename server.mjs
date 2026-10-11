@@ -9,6 +9,8 @@ import { viewerRoutes } from './viewer-service.mjs';
 import { startAutoImport } from './auto-import.mjs';
 import { handleMedia } from './media-gateway.mjs';
 import { instantCatalog } from './instant-catalog.mjs';
+import { adminXtreamAccounts } from './admin-xtream.mjs';
+import { xtreamCompat } from './xtream-compat.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -73,6 +75,9 @@ async function route(req,res) {
   const url=new URL(req.url||'/', 'http://localhost');
   const p=url.pathname;
   if(req.method==='GET' && p==='/health') return json(res,200,{ok:true,service:'AKKAD CORE',supabase_configured:Boolean(supaUrl && apiKey)});
+  if(p==='/player_api.php'||p==='/get.php'||/^\/(live|movie|series)\//.test(p))
+    return xtreamCompat({req,res,p,url,apiRequest,json,handleMedia});
+  if(p.startsWith('/api/admin/xtream-accounts'))return adminXtreamAccounts({req,res,p,auth,readBody,apiRequest,json});
   if(p.startsWith('/api/instant/')) return instantCatalog({req,res,p,url,auth,apiRequest,json});
   if(p.startsWith('/api/watch/')||p.startsWith('/api/episodes/')||p.startsWith('/api/media/')||/^\/api\/free\/[^/]+\/(watch|episodes)\//.test(p))
     return handleMedia({req,res,p,url,auth,apiRequest,json});
@@ -181,5 +186,5 @@ async function route(req,res) {
   if(p.startsWith('/api/')) return json(res,404,{error:'Not found'});
   return json(res,404,{error:'Not found'});
 }
-http.createServer(async(req,res)=>{try{await route(req,res);}catch(err){const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:500;console.error('API',req.method,req.url,status,err.message);json(res,status,{error:status===500?'خطأ داخلي في الخادم':err.message});}}).listen(port,'0.0.0.0',()=>console.log('AKKAD CORE listening on',port));
+http.createServer(async(req,res)=>{try{await route(req,res);}catch(err){const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:500;console.error('API',req.method,(req.url||'').split('?')[0].replace(/\/(live|movie|series)\/[^/]+\/[^/]+/,'/$1/[redacted]/[redacted]'),status,err.message);json(res,status,{error:status===500?'خطأ داخلي في الخادم':err.message});}}).listen(port,'0.0.0.0',()=>console.log('AKKAD CORE listening on',port));
 startAutoImport({url:supaUrl,publishableKey:apiKey});
