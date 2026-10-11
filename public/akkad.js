@@ -142,10 +142,18 @@ async function startVideo(url,format){
  video.addEventListener('waiting',()=>setWatchStatus('جارٍ تحميل الفيديو…'));
  video.addEventListener('error',()=>setWatchStatus('فشل تشغيل الفيديو. قد لا يدعم المتصفح هذه الصيغة أو يكون رابط المزود متوقفاً.'));
  if(format==='hls'&&window.Hls?.isSupported()){
-  currentHls=new window.Hls({enableWorker:false,maxBufferLength:30,liveSyncDurationCount:3});
+  currentHls=new window.Hls({enableWorker:false,maxBufferLength:25,maxMaxBufferLength:45,liveSyncDurationCount:3,backBufferLength:45});
   currentHls.loadSource(url);currentHls.attachMedia(video);
+  let networkRetries=0,mediaRetries=0;
   currentHls.on(window.Hls.Events.ERROR,(_event,detail)=>{
-   if(detail.fatal)setWatchStatus('تعذّر تشغيل البث: '+(detail.type||'خطأ بالمصدر'));
+   if(!detail.fatal)return;
+   if(detail.type===window.Hls.ErrorTypes.NETWORK_ERROR&&networkRetries++<2){
+    setWatchStatus('جارٍ إعادة الاتصال بالمزود…');currentHls?.startLoad();return;
+   }
+   if(detail.type===window.Hls.ErrorTypes.MEDIA_ERROR&&mediaRetries++<1){
+    setWatchStatus('محاولة إصلاح توافق ترميز الفيديو…');currentHls?.recoverMediaError();return;
+   }
+   setWatchStatus('المصدر لم يعمل في هذا المتصفح: '+(detail.details||detail.type));
   });
  }else{
   video.src=url;
@@ -227,6 +235,7 @@ async function loadCatalog(){
 }
 function refreshUser(){
  const t=$('#account-status'),p=$('#playlist-account');
+ if(freeSourceCode){if(t)t.textContent='حساب الكود: '+freeSourceCode;if(p)p.textContent='المصدر المختار بالكود: '+freeSourceCode;return;}
  if(!currentSession){if(t)t.textContent=freeSourceCode?'مصدر مجاني: '+freeSourceCode:'معاينة — يلزم حساب VIP';if(p)p.textContent=freeSourceCode?'المصدر المجاني: '+freeSourceCode:'لم يتم تسجيل الدخول';return;}
  const sub=currentSession.subscriptions?.find(s=>s.status==='active'&&new Date(s.ends_at)>new Date()&&new Date(s.starts_at)<=new Date());
  const status=sub?'VIP فعّال حتى '+new Date(sub.ends_at).toLocaleDateString('ar-IQ'):'لا يوجد اشتراك نشط';
