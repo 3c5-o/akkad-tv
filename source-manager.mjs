@@ -107,7 +107,7 @@ async function xtream(endpoint,creds,action,allowlist,options={}){
  try{return JSON.parse(response);}catch{throw error('صيغة Xtream غير صحيحة',502);}
 }
 export async function getSeriesInfo(source,credentials,seriesId,allowlist,options={}){
- if(source.kind!=='xtream'||!/^\\d{1,15}$/.test(String(seriesId)))throw error('معرف المسلسل غير صالح');
+ if(source.kind!=='xtream'||!/^\d{1,15}$/.test(String(seriesId)))throw error('معرف المسلسل غير صالح');
  validateEndpoint(source.endpoint,allowlist,{allowHttp:options.allowHttp===true});
  const base=source.endpoint.endsWith('/')?source.endpoint:source.endpoint+'/';
  const u=new URL('player_api.php',base);
