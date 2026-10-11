@@ -44,7 +44,7 @@ test('concurrent 401 requests refresh exactly once instead of logging out',async
  assert.equal(refreshed,1);
  assert.equal(fixture.store.get('akkad_admin_refresh_v2'),'next-refresh');
  assert.ok(requested>=5);
- assert.equal(fixture.elements.get('#admin-login')?.classList.state.has('hidden'),false);
+ assert.equal(fixture.elements.has('#admin-login'),false); // no forced logout dialog was created
 });
 
 test('network failures leave the existing admin session intact',async()=>{
