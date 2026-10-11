@@ -106,6 +106,20 @@ async function xtream(endpoint,creds,action,allowlist,options={}){
  const response=await readRemote(url.toString(),allowlist,{...options,host:new URL(endpoint).hostname});
  try{return JSON.parse(response);}catch{throw error('صيغة Xtream غير صحيحة',502);}
 }
+export async function getSeriesInfo(source,credentials,seriesId,allowlist,options={}){
+ if(source.kind!=='xtream'||!/^\\d{1,15}$/.test(String(seriesId)))throw error('معرف المسلسل غير صالح');
+ validateEndpoint(source.endpoint,allowlist,{allowHttp:options.allowHttp===true});
+ const base=source.endpoint.endsWith('/')?source.endpoint:source.endpoint+'/';
+ const u=new URL('player_api.php',base);
+ u.searchParams.set('username',credentials.username);
+ u.searchParams.set('password',credentials.password);
+ u.searchParams.set('action','get_series_info');
+ u.searchParams.set('series_id',String(seriesId));
+ const reply=await readRemote(u.toString(),allowlist,{...options,host:new URL(source.endpoint).hostname});
+ if(reply.length>6000000)throw error('عدد حلقات المصدر أكبر من الحد المتاح',413);
+ let result;try{result=JSON.parse(reply)}catch{throw error('المزود أرجع بيانات حلقات غير صالحة',502);}
+ return result;
+}
 export async function verifySource(source,credentials,allowlist,options={}){
  validateEndpoint(source.endpoint,allowlist,{allowHttp:options.allowHttp===true});
  if(source.kind==='xtream')return xtreamOverview(await xtream(source.endpoint,credentials,null,allowlist,options));
