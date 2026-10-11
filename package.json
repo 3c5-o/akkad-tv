@@ -11,6 +11,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "hls.js": "^1.6.12"
+    "hls.js": "^1.6.12",
+    "mpegts.js": "^1.8.2"
   }
 }
