@@ -21,20 +21,29 @@ export function validateEndpoint(value,allowlist,{query=false,host=null,allowHtt
  return u;
 }
 async function readRemote(url,allowed,options={}){
- const u=validateEndpoint(url,allowed,{query:true,host:options.host||null,allowHttp:options.allowHttp===true});
- let ips;
- try{
+ let u=validateEndpoint(url,allowed,{query:true,host:options.host||null,allowHttp:options.allowHttp===true});
+ let r;const originalHost=u.hostname;
+ for(let redirects=0;redirects<=3;redirects++){
+  let ips;
+  try{
    ips=net.isIP(u.hostname)===4?[{address:u.hostname}]:await (options.lookup||lookup)(u.hostname,{all:true});
- }catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
- if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
- let r;
- try{r=await (options.fetch||fetch)(u,{redirect:'error',signal:AbortSignal.timeout(15000)});}
- catch(e){
+  }catch{throw error('تعذّر التحقق من عنوان DNS لمصدر IPTV',502);}
+  if(!ips.length||ips.some(x=>!publicAddress(x.address)))throw error('عنوان المصدر غير عام',403);
+  try{r=await (options.fetch||fetch)(u,{redirect:'manual',signal:AbortSignal.timeout(15000)});}
+  catch(e){
    const code=String(e?.cause?.code||'');
    if(e?.name==='TimeoutError'||/TIMEOUT|ETIMEDOUT/.test(code))throw error('انتهت مهلة اتصال خادم IPTV (15 ثانية): تحقق من المنفذ واتصال المزود',504);
    if(['ECONNREFUSED','EHOSTUNREACH','ENETUNREACH'].includes(code))throw error('رفض المزود الاتصال أو خادم IPTV غير متاح من Railway',502);
    if(['ENOTFOUND','EAI_AGAIN'].includes(code))throw error('تعذّر العثور على DNS لخادم IPTV',502);
    throw error('تعذّر الاتصال بالمزود: تحقق من العنوان والمنفذ وعدم وجود حظر على خوادم Railway',502);
+  }
+  if(![301,302,303,307,308].includes(r.status))break;
+  if(redirects===3)throw error('تجاوز تحويلات Xtream الحد المسموح',502);
+  const next=r.headers.get('location');
+  if(!next)throw error('المزود أرسل تحويل Xtream دون رابط',502);
+  await r.body?.cancel().catch(()=>{});
+  // Player API includes source credentials: never forward these cross-domain.
+  u=validateEndpoint(new URL(next,u).toString(),allowed,{query:true,host:originalHost,allowHttp:options.allowHttp===true});
  }
  if(!r.ok)throw error('المصدر أعاد HTTP '+r.status,502);
  const max=24*1024*1024;

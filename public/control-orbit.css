@@ -1,0 +1,89 @@
+/* AKKAD CONTROL ORBIT — portrait-first, RTL, independent from viewer. */
+.akkad-control{--bg:#050a1c;--panel:#0c1836;--panel2:#111c3e;--gold:#4abaff;--gold2:#d9edff;--mute:#a5b9d8;--edge:#2861a7;--white:#f4f8ff;--radius:16px;background:#050a1c;color:#f4f8ff;min-width:0}
+.akkad-control .control-glow{background:radial-gradient(ellipse at 100% 0%,#254eb463,transparent 52%),radial-gradient(ellipse at 0 80%,#45228b50,transparent 57%),linear-gradient(160deg,#07112c,#040613)}
+.akkad-control .ctrl-layout{direction:rtl;grid-template-columns:minmax(210px,255px) minmax(0,1fr)}
+.akkad-control .ctrl-sidebar{background:#07122aea;border-color:#2556a9;padding:20px 12px}
+.akkad-control .ctrl-brand{padding:6px 8px}
+.akkad-control .ctrl-brand img{width:49px;height:49px}
+.akkad-control .ctrl-brand strong{color:#f1f7ff;text-shadow:0 0 18px #1c8dfd69}
+.akkad-control .ctrl-brand span{color:#86bffa}
+.akkad-control .nav-link{color:#b9c9e5;border-radius:11px;padding:12px;transition:background .16s,border-color .16s}
+.akkad-control .nav-link.selected,.akkad-control .nav-link:hover{background:linear-gradient(100deg,#1164c577,#48249f4a);border-color:#328cff;color:#f5faff}
+.akkad-control .nav-glyph{color:#46c4ff}
+.akkad-control .ctrl-sidefoot{border-color:#2556a9;color:#d4e7ff}
+.akkad-control .ctrl-main{max-width:1720px;padding:24px clamp(12px,3vw,38px) 105px}
+.akkad-control .ctrl-header{border-color:#2e569e;align-items:center}
+.akkad-control .ctrl-eyebrow{color:#59bdff;letter-spacing:1.6px}
+.akkad-control .ctrl-header h1{color:#eff7ff;font-size:clamp(1.35rem,2.7vw,2rem)}
+.akkad-control .ctrl-live{border:1px solid #4779b5;color:#c3e0ff;background:#0b2045}
+.akkad-control .ctrl-live.ok{color:#79f0ca;border-color:#2f8a78}
+.akkad-control .ctrl-section h2,.akkad-control .ctrl-section h3,.akkad-control .ctrl-panel h3{color:#edf6ff}
+.akkad-control .ctrl-intro{background:radial-gradient(ellipse at 20% 25%,#2855d973,transparent 43%),linear-gradient(110deg,#112858,#080f2a 80%);border:1px solid #397ac7;min-height:152px}
+.akkad-control .ctrl-intro h2{color:white}
+.akkad-control .ctrl-intro p{color:#b9caec}
+.akkad-control .ctrl-intro img{filter:drop-shadow(0 0 16px #1598ff);max-width:27%}
+.akkad-control .ctrl-stat{background:linear-gradient(142deg,#142656,#0a1230);border:1px solid #2b5bad;box-shadow:0 8px 25px #01041068}
+.akkad-control .ctrl-stat span{color:#afc9ef}
+.akkad-control .ctrl-stat strong{color:#fff}
+.akkad-control .ctrl-stat small{color:#72b5eb}
+.akkad-control .ctrl-panel{background:linear-gradient(155deg,#0f1d43,#080f27);border:1px solid #2c5295;border-radius:17px;box-shadow:0 8px 32px #0005}
+.akkad-control .panel-heading p,.akkad-control .muted,.akkad-control .note{color:#a7bfdf}
+.akkad-control .ctrl-form .field label{color:#d4e8ff}
+.akkad-control .field .input,.akkad-control .field .select,.akkad-control .input,.akkad-control .select{background:#081631;border:1px solid #36578e;color:#f5faff;border-radius:10px;padding:10px 12px;min-height:42px}
+.akkad-control .input:focus,.akkad-control .select:focus{border-color:#55c5ff;outline:2px solid #36a5fa44}
+.akkad-control .btn{background:#142653;border:1px solid #427aca;color:#e3f1ff;border-radius:10px;padding:9px 13px}
+.akkad-control .btn.primary{background:linear-gradient(110deg,#0aaaf0,#1e6deb,#7841e7);border:1px solid #489ce8;color:#fff;box-shadow:0 6px 18px #1253cc50}
+.akkad-control .btn.ghost{background:#0d2045;color:#d2e8ff}
+.akkad-control .btn.danger{background:#341c3e;border:1px solid #a34470;color:#ffc5d6}
+.akkad-control .btn:focus-visible,.akkad-control .nav-link:focus-visible{outline:3px solid #4fc9ff;outline-offset:2px}
+.akkad-control .ctrl-check{color:#c1d9f9}
+.akkad-control .ctrl-check input{accent-color:#1b8afa}
+.akkad-control .ctrl-feedback{background:#091b3b;border:1px dashed #3c6eaf;color:#d1e6ff;line-height:1.75}
+.akkad-control .ctrl-feedback.error{border-color:#bf5381;color:#ffb9ce}
+.akkad-control .ctrl-item{background:#0e1c3a;border:1px solid #2c5594;border-radius:12px}
+.akkad-control .ctrl-item-sub{color:#afc3df}
+.akkad-control .provider-card{background:linear-gradient(150deg,#102756,#0b1430);border:1px solid #3161af}
+.akkad-control .provider-card.active{border-color:#32b7a4}
+.akkad-control .provider-card h3{color:#f1f8ff}
+.akkad-control .provider-url{color:#8ed0ff;text-align:right;direction:ltr}
+.akkad-control .provider-meta{border-color:#3464a77a}
+.akkad-control .provider-meta strong{color:#e1f4ff}
+.akkad-control .provider-meta span{color:#bad1ee}
+.akkad-control .provider-card .status{border-color:#bd6572;color:#ffc7ce}
+.akkad-control .provider-card.active .status{border-color:#32b795;color:#8cffe1}
+.akkad-control .ctrl-filters button{background:#0d1f46;border:1px solid #3865a3;color:#c3dcfa}
+.akkad-control .ctrl-filters button.active{background:linear-gradient(100deg,#0f75df,#6339dd);color:white}
+.akkad-control .login-shade{background:#040919ed;backdrop-filter:blur(12px)}
+.akkad-control .login-card{background:linear-gradient(150deg,#122b61,#08132d);border:1px solid #3984ed;box-shadow:0 0 80px #1467de44}
+.akkad-control .login-card h2{color:#fff}
+.akkad-control .ctrl-mobile-tabs button{background:#10244c;border:1px solid #3f63a0;color:#c1dafc}
+.akkad-control .ctrl-mobile-tabs button.selected{background:linear-gradient(115deg,#1586fc,#7044ed);color:white}
+.akkad-control .ctrl-bottom{background:#07132cf7;border-top:1px solid #367cd1}
+.akkad-control .ctrl-bottom button{color:#9ccaff}
+.akkad-control .ctrl-bottom button.active{color:#fff}
+.akkad-control .toast{background:#0f2552;border-color:#368cf9}
+.akkad-control .goldline{background:linear-gradient(90deg,transparent,#2a99ff,transparent)}
+@media(max-width:980px){.akkad-control .ctrl-layout{grid-template-columns:195px minmax(0,1fr)}.akkad-control .provider-grid{grid-template-columns:1fr}}
+@media(max-width:740px){
+ .akkad-control .ctrl-layout{display:block}
+ .akkad-control .ctrl-sidebar{display:none}
+ .akkad-control .ctrl-main{padding:17px 12px 92px}
+ .akkad-control .ctrl-header{margin-bottom:12px;padding-bottom:13px}
+ .akkad-control .ctrl-header-actions{max-width:45%;justify-content:flex-end}
+ .akkad-control .ctrl-header h1{font-size:1.35rem}
+ .akkad-control .ctrl-mobile-tabs{display:flex;border-color:#315e9a;gap:7px;scrollbar-width:thin;scrollbar-color:#3776da transparent}
+ .akkad-control .ctrl-intro{padding:18px;min-height:135px}
+ .akkad-control .ctrl-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .akkad-control .ctrl-stat{padding:14px}
+ .akkad-control .ctrl-stat strong{font-size:1.5rem}
+ .akkad-control .ctrl-two{grid-template-columns:1fr}
+ .akkad-control .ctrl-form{grid-template-columns:1fr}
+ .akkad-control .ctrl-form .wide{grid-column:auto}
+ .akkad-control .ctrl-panel{padding:14px}
+ .akkad-control .provider-grid{grid-template-columns:1fr}
+ .akkad-control .ctrl-item{flex-direction:column;align-items:stretch}
+ .akkad-control .ctrl-item-actions{width:100%}
+ .akkad-control .ctrl-bottom{display:flex}
+ .akkad-control .provider-actions .btn{flex:1;min-width:46%}
+}
+@media(max-width:360px){.akkad-control .ctrl-live{display:none}.akkad-control .ctrl-bottom span{font-size:.59rem}}

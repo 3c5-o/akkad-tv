@@ -1,32 +1,21 @@
-# أكّد TV — Android TV
+# AKKAD — إصدار Android مزدوج
 
-تطبيق Android بواجهة مستخدم أفقية إجبارية، يدعم الهواتف الأفقية وAndroid TV وأجهزة الريموت.
+## المستخدم الأفقي
+المسار `android/app`. شاشة كاملة إجبارية `landscape` مع مشغل Media3/ExoPlayer؛ يدعم HLS وMPEG-TS وملفات الفيديو التي يستطيع نظام الجهاز فك ترميزها. تسجيل VIP أو الكود يعمل وفق صلاحيات الخادم.
 
-## تنفيذ قائم
-- الحزمة: `iq.akkad.tv.preview` للاختبار؛ الإصدار النهائي: `iq.akkad.tv`.
-- `TvActivity` بنمط Immersive Fullscreen و`screenOrientation=landscape`.
-- هوية أكّد الفضائية زرقاء/بنفسجية، مع واجهة المستخدم الحالية من `https://akkad-core-production.up.railway.app/tv`.
-- المشغل الأصلي Media3/ExoPlayer لتشغيل الفيديو بعد التحقق من صلاحية الرابط والنطاق ومسار `/api/media/`.
-- تكامل اتجاهات الريموت والأسهم مع واجهة الويب، وعدم منح أذونات للكاميرا/الميكروفون.
-- منع أخذ لقطة شاشة/التسجيل من داخل نافذة APK عبر `FLAG_SECURE`، مع العلم أنه لا يمنع نسخ ملف APK نفسه.
-- لا تحفظ مفاتيح مزودي Xtream أو صلاحيات الخادم ضمن APK.
+## الإدارة العمودية
+المسار `android/control`. حزمة مستقلة `iq.akkad.control`، شاشة ثابتة `portrait` تعرض إدارة المصادر، الحسابات، الأكواد، الباقات، TMDb، وفحص التشغيل.
 
-## البناء التجريبي
-يقوم GitHub Actions بتنفيذ `gradle -p android :app:assembleDebug` وإرفاق `app-debug.apk` في Artifact باسم `akkadtv-landscape-preview-apk`.
-هذه نسخة اختبارية تحمل توقيع Android Debug، وهي **ليست توقيع إصدار ثابتاً**، وقد يختلف توقيعها بين تشغيلات CI.
-
-## التوقيع النهائي الثابت
-يجب إعداد ملف keystore خاص وغير مرفوع إلى مستودع GitHub العام، واستخدام هذه المتغيرات الآمنة عند بناء Release:
-
-```text
-AKKAD_SIGNING_STORE_FILE
-AKKAD_SIGNING_STORE_PASSWORD
-AKKAD_SIGNING_KEY_ALIAS
-AKKAD_SIGNING_KEY_PASSWORD
+## بناء نسختَي APK
+يستخدم GitHub Actions:
 ```
+gradle -p android :app:assembleDebug :control:assembleDebug --no-daemon
+```
+الملفات الناتجة:
+- `android/app/build/outputs/apk/debug/app-debug.apk`
+- `android/control/build/outputs/apk/debug/control-debug.apk`
 
-نسخة Release: `gradle -p android :app:assembleRelease`.
-يجب الاحتفاظ بنسخة احتياطية آمنة من keystore وكلمات المرور؛ لا يمكن ضمان تحديث نفس حزمة الإصدار عند فقد توقيعها.
+هذه نسخ اختبار بتوقيع Android Debug ولا تحافظ على هوية توقيع إنتاج ثابت بين عمليات البناء. لا تضع مفاتيح التوقيع داخل المستودع.
+لنسخ Release اضبط `AKKAD_SIGNING_STORE_FILE`, `AKKAD_SIGNING_STORE_PASSWORD`, `AKKAD_SIGNING_KEY_ALIAS`, `AKKAD_SIGNING_KEY_PASSWORD` في بيئة بناء آمنة.
 
-## الاختبارات
-`npm test` يتحقق من مكونات الواجهة وصلاحية المسارات، ولا يغني عن اختبار التشغيل على هاتف وجهاز Android TV حقيقيين.
+النسختان تحملان نفس بيانات الخادم عبر HTTPS. لا يمكن إجبار كل مزود على العمل إذا كان رابط البث الأصلي منتهياً أو لا يقبل اتصالات Railway، ولا يمكن ضمان صوت MKV على كل أجهزة فك الترميز.

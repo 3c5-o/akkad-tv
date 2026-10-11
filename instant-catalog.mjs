@@ -108,7 +108,7 @@ export async function instantCatalog({req,res,p,url,auth,apiRequest,json}){
   return json(res,200,{seasons});
  }
  if(kind==='series')throw failure('اختر الحلقة أولاً',400);
- const ext=cleanExt(url.searchParams.get('ext'))||(kind==='live'?'m3u8':'mp4');
+ const ext=kind==='live'&&url.searchParams.get('format')==='ts'?'ts':cleanExt(url.searchParams.get('ext'))||(kind==='live'?'m3u8':'mp4');
  const ticket=issueTicket({source_id:source.id,media_id:source.id,kind,external_id:externalId,extension:ext});
- return json(res,200,{url:'/api/media/'+ticket,format:kind==='live'?'hls':ext==='m3u8'?'hls':ext,label:source.name,expires_in:3600});
+ return json(res,200,{url:'/api/media/'+ticket+(kind==='live'&&ext==='ts'?'?format=ts':''),format:ext==='m3u8'?'hls':ext,label:source.name,expires_in:3600});
 }

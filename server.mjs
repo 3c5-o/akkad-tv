@@ -7,7 +7,7 @@ import { handleSourceAction, handlePreflight, validateEndpoint } from './source-
 import { adminExtras } from './admin-extras.mjs';
 import { viewerRoutes } from './viewer-service.mjs';
 import { startAutoImport } from './auto-import.mjs';
-import { handleMedia } from './media-gateway.mjs';
+import { handleMedia, probeSourcePlayback } from './media-gateway.mjs';
 import { instantCatalog } from './instant-catalog.mjs';
 import { adminXtreamAccounts } from './admin-xtream.mjs';
 import { xtreamCompat } from './xtream-compat.mjs';
@@ -77,6 +77,21 @@ async function route(req,res) {
   if(req.method==='GET' && p==='/health') return json(res,200,{ok:true,service:'AKKAD CORE',supabase_configured:Boolean(supaUrl && apiKey)});
   if(p==='/player_api.php'||p==='/get.php'||/^\/(live|movie|series)\//.test(p))
     return xtreamCompat({req,res,p,url,apiRequest,json,handleMedia});
+  const probe=p.match(/^\/api\/admin\/sources\/([0-9a-f-]{36})\/probe$/);
+  if(probe){
+    if(req.method!=='POST')return json(res,405,{error:'طريقة غير مسموحة'});
+    await auth(req,{admin:true});
+    const role=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!role)return json(res,503,{error:'مفتاح الخدمة غير مهيأ'});
+    const sources=await apiRequest('/rest/v1/akkad_sources?select=*&id=eq.'+probe[1]+'&limit=1',{token:role});
+    const source=sources?.[0];if(!source)return json(res,404,{error:'المزود غير موجود'});
+    if(!source.enabled||source.kind!=='xtream')return json(res,422,{error:'فعّل مزود Xtream بعد نجاح فحص الحساب'});
+    const sealed=(await apiRequest('/rest/v1/akkad_source_credentials?select=*&source_id=eq.'+source.id+'&limit=1',{token:role}))?.[0];
+    if(!sealed)return json(res,422,{error:'لم تُحفظ بيانات المزود'});
+    const {decrypt}=await import('./source-manager.mjs');
+    const checks=await probeSourcePlayback({source,credentials:decrypt(sealed,process.env.AKKAD_SOURCE_ENCRYPTION_KEY),allowlist:process.env.AKKAD_ALLOWED_SOURCE_HOSTS||''});
+    return json(res,200,{source_id:source.id,checks});
+  }
   if(p.startsWith('/api/admin/xtream-accounts'))return adminXtreamAccounts({req,res,p,auth,readBody,apiRequest,json});
   if(p.startsWith('/api/instant/')) return instantCatalog({req,res,p,url,auth,apiRequest,json});
   if(p.startsWith('/api/watch/')||p.startsWith('/api/episodes/')||p.startsWith('/api/media/')||/^\/api\/free\/[^/]+\/(watch|episodes)\//.test(p))
@@ -86,12 +101,20 @@ async function route(req,res) {
   if(p.startsWith('/api/admin/extra/') || /^\/api\/free\/[A-Z0-9]{2,12}\/catalog$/.test(p))
     return adminExtras({req,res,p,json,auth,apiRequest,readBody});
   if(req.method==='GET' && (p==='/'||p==='/tv'||p==='/admin')) return serveFile(res,p==='/admin'?'admin.html':'tv.html');
+  if(req.method==='GET' && p==='/mpegts.min.js') {
+    try{
+      const data=await fs.readFile(path.join(root,'node_modules','mpegts.js','dist','mpegts.min.js'));
+      res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});
+      res.end(data);
+    }catch{return json(res,503,{error:'MPEG-TS player not installed'});}
+    return;
+  }
   if(req.method==='GET' && p==='/hls.min.js') {
     try{const data=await fs.readFile(path.join(root,'node_modules','hls.js','dist','hls.min.js'));
       res.writeHead(200,{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=604800','x-content-type-options':'nosniff'});res.end(data);
     }catch{return json(res,503,{error:'HLS player not installed'});}return;
   }
-  if(req.method==='GET' && ['/tv-gold.css','/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg','/orbit-tv.css','/orbit-tv.js','/orbit-logo.svg'].includes(p)) return serveFile(res,p.slice(1));
+  if(req.method==='GET' && ['/tv-gold.css','/akkad.css','/akkad.js','/control.css','/control.js','/brand.svg','/orbit-tv.css','/orbit-tv.js','/orbit-logo.svg','/control-orbit.css'].includes(p)) return serveFile(res,p.slice(1));
   if(req.method==='POST' && p==='/api/auth/login') {
     const body=await readBody(req);
     if(typeof body.email!=='string' || typeof body.password!=='string' || body.password.length>300) return json(res,400,{error:'Invalid credentials'});

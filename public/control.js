@@ -70,7 +70,7 @@ function renderSources(){
    '<div class="provider-meta"><div><strong>'+Number(s.live_count||0)+'</strong><span>قناة</span></div><div><strong>'+Number(s.movie_count||0)+'</strong><span>فيلم</span></div><div><strong>'+Number(s.series_count||0)+'</strong><span>مسلسل</span></div></div>'+
    '<div class="muted small">'+(s.free_enabled?'الكود المجاني: '+safe(s.free_code):'بدون كود مجاني')+' • '+(s.auto_import?'مزامنة تلقائية مفعّلة':'مزامنة يدوية')+'</div>'+
    (s.last_error?'<p class="muted small">'+safe(s.last_error)+'</p>':'')+
-   '<div class="provider-actions"><button class="btn small" data-edit-source="'+safe(s.id)+'">إدارة وتعديل</button><button class="btn small ghost" data-inspect-source="'+safe(s.id)+'">فحص مجدداً</button><button class="btn small danger" data-delete-source="'+safe(s.id)+'">حذف</button></div></div>';
+   '<div class="provider-actions"><button class="btn small" data-edit-source="'+safe(s.id)+'">إدارة وتعديل</button><button class="btn small ghost" data-inspect-source="'+safe(s.id)+'">فحص الحساب</button><button class="btn small primary" data-probe-source="'+safe(s.id)+'">فحص التشغيل</button><button class="btn small danger" data-delete-source="'+safe(s.id)+'">حذف</button></div></div>';
  }).join(''):empty('لا توجد مصادر في هذه الحالة');
  $$('[data-delete-source]').forEach(b=>b.onclick=async()=>{
   const src=resources.sources.find(x=>x.id===b.dataset.deleteSource);
@@ -78,7 +78,22 @@ function renderSources(){
   try{await api('/api/admin/extra/source/'+src.id,{method:'DELETE'});currentSource=null;notice('حُذف المزوّد');await refreshAll()}catch(e){notice(e.message)}
  });
  $$('[data-edit-source]').forEach(x=>x.onclick=()=>chooseSource(x.dataset.editSource,true));
- $$('[data-inspect-source]').forEach(x=>x.onclick=()=>{chooseSource(x.dataset.inspectSource,true);inspectSource()});
+ $('[data-inspect-source]').forEach(x=>x.onclick=()=>{chooseSource(x.dataset.inspectSource,true);inspectSource()});
+ $('[data-probe-source]').forEach(x=>x.onclick=async()=>{chooseSource(x.dataset.probeSource,true);await probePlayback()});
+}
+async function probePlayback(){
+ if(!currentSource)return notice('اختر المزود أولاً');
+ const node=$('#source-playback-result');
+ node.textContent='جارٍ تجربة عينة فعلية من كل قسم. قد يستغرق الفحص عدة ثوانٍ…';
+ node.classList.remove('error');
+ try{
+  const data=await api('/api/admin/sources/'+currentSource.id+'/probe',{method:'POST',body:'{}'});
+  const names={live:'القنوات',movie:'الأفلام',series:'المسلسلات'};
+  node.textContent=(data.checks||[]).map(c=>(c.ok?'يعمل: ':'فشل: ')+(names[c.kind]||c.kind)+
+    (c.ok?' • '+(c.content_type||('الحلقات: '+c.episodes))+' • التحويلات: '+(c.redirects||0):' • '+c.reason)).join('\n');
+  if(data.checks?.some(c=>!c.ok))node.classList.add('error');
+  else notice('نجح فحص تشغيل الوسائط');
+ }catch(e){fail(e,node)}
 }
 function chooseSource(id,scroll){
  currentSource=resources.sources.find(x=>x.id===id)||null;if(!currentSource)return;
@@ -310,6 +325,7 @@ async function setup(){
    notice('تم تعطيل الكود');await refreshAll();chooseSource(currentSource.id,false)}catch(e){notice(e.message)}
  };
  $('#source-check').onclick=inspectSource;
+ $('#source-playback-probe').onclick=probePlayback;
  $('#source-sync').onclick=async()=>{
   if(!currentSource)return notice('حدد مصدر IPTV');
   try{const data=await api('/api/admin/sources/'+currentSource.id+'/sync',{method:'POST',body:JSON.stringify({kind:$('#source-sync-kind').value,limit:10})});
