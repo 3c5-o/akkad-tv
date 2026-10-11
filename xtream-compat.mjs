@@ -138,17 +138,23 @@ export async function xtreamCompat({req,res,p,url,apiRequest,json,handleMedia}){
   return json(res,200,[]);
  }
  const output=url.searchParams.get('output')==='ts'?'ts':'m3u8';
+ // Prepare source responses before sending headers, avoiding partial/corrupt M3U files.
+ const bundles=[];
+ for(const kind of ['live','movie']){
+  const items=await fetchItems(kind),mapped=await mapItems(items);
+  bundles.push({kind,items,mapped});
+ }
  res.writeHead(200,{'content-type':'audio/x-mpegurl; charset=utf-8','cache-control':'private, no-store',
   'content-disposition':'attachment; filename="akkad.m3u"','x-content-type-options':'nosniff'});
- res.write('#EXTM3U\n');
- for(const kind of ['live','movie','series']){
-  const items=await fetchItems(kind),mapped=await mapItems(items);
+ res.write('#EXTM3U\\n');
+ for(const {kind,items,mapped} of bundles){
   for(const x of items){
-   const alias=mapped.get(x.source_id+':'+kind+':'+x.external_id);
-   if(!alias)continue;
-   const ext=kind==='live'?output:kind==='movie'?cleanExt(x.container_extension):'mp4';
-   const link=new URL(streamPath(kind==='series'?'episode':kind,username,password,alias,ext),publicBase());
-   res.write('#EXTINF:-1 group-title="'+String(x.category||'عام').replace(/["\r\n]/g,'')+'",'+String(x.title).replace(/[\r\n]/g,' ')+'\n'+link+'\n');
+   const alias=mapped.get(x.source_id+':'+kind+':'+x.external_id);if(!alias)continue;
+   const ext=kind==='live'?output:cleanExt(x.container_extension);
+   const link=new URL(streamPath(kind,username,password,alias,ext),publicBase());
+   const group=String(x.category||'عام').replace(/["\\r\\n]/g,'');
+   const title=String(x.title).replace(/[\\r\\n]/g,' ');
+   res.write('#EXTINF:-1 group-title="'+group+'",'+title+'\\n'+link+'\\n');
   }
  }
  res.end();return true;
