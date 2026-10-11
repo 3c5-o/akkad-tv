@@ -1,0 +1,50 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'iq.akkad.tv'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'iq.akkad.tv'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+        buildConfigField 'String', 'AKKAD_URL', '"https://akkad-core-production.up.railway.app/tv"'
+    }
+
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    signingConfigs {
+        production {
+            def store = System.getenv('AKKAD_SIGNING_STORE_FILE')
+            if (store) {
+                storeFile file(store)
+                storePassword System.getenv('AKKAD_SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('AKKAD_SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('AKKAD_SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-preview'
+        }
+        release {
+            minifyEnabled false
+            if (System.getenv('AKKAD_SIGNING_STORE_FILE')) {
+                signingConfig signingConfigs.production
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.5.1'
+    implementation 'androidx.media3:media3-ui:1.5.1'
+}
