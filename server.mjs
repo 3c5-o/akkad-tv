@@ -8,6 +8,7 @@ import { adminExtras } from './admin-extras.mjs';
 import { viewerRoutes } from './viewer-service.mjs';
 import { startAutoImport } from './auto-import.mjs';
 import { handleMedia } from './media-gateway.mjs';
+import { instantCatalog } from './instant-catalog.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -72,6 +73,7 @@ async function route(req,res) {
   const url=new URL(req.url||'/', 'http://localhost');
   const p=url.pathname;
   if(req.method==='GET' && p==='/health') return json(res,200,{ok:true,service:'AKKAD CORE',supabase_configured:Boolean(supaUrl && apiKey)});
+  if(p.startsWith('/api/instant/')) return instantCatalog({req,res,p,url,auth,apiRequest,json});
   if(p.startsWith('/api/watch/')||p.startsWith('/api/episodes/')||p.startsWith('/api/media/')||/^\/api\/free\/[^/]+\/(watch|episodes)\//.test(p))
     return handleMedia({req,res,p,url,auth,apiRequest,json});
   if(p==='/api/auth/username'||p.startsWith('/api/admin/viewers'))
