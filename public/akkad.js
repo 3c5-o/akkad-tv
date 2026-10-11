@@ -259,31 +259,62 @@ async function initTv(){
  $('#watch-fullscreen').onclick=()=>fullscreen($('#watch-video video')||$('#tv-watch-modal')); 
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#tv-watch-modal').classList.contains('hidden'))hideWatch();else openTv('home');}});
 
- $('#tv-use-free').onchange=()=>{
-  const free=$('#tv-use-free').checked;
+ const setLoginMode=free=>{
+  loginByCode=free;
+  $('#tv-credentials-fields').classList.toggle('hidden',free);
   $('#tv-free-entry').classList.toggle('hidden',!free);
-  $$('[name=username], [name=password]', $('#tv-login-form')).forEach(x=>x.required=!free);
-  $('button[type=submit]',$('#tv-login-form')).textContent=free?'فتح المصدر المجاني':'دخول إلى أكّد';
+  $('#tv-use-code').classList.toggle('hidden',free);
+  $('#tv-use-vip').classList.toggle('hidden',!free);
+  $$('[name=username], [name=password]',$('#tv-login-form')).forEach(x=>x.required=!free);
+  $('#tv-free-entry input').required=free;
+  $('#tv-login-submit').textContent=free?'فتح حساب الكود':'دخول VIP';
  };
-
+ $('#tv-use-code').onclick=()=>setLoginMode(true);
+ $('#tv-use-vip').onclick=()=>setLoginMode(false);
  $$('[data-tv-tab]').forEach(el=>el.addEventListener('click',()=>openTv(el.dataset.tvTab)));
  $('#tv-search').addEventListener('input',()=>['live','movie','series'].forEach(k=>renderCatalog(k)));
  $('#tv-user').onclick=()=>{if(!token&&!freeSourceCode)$('#tv-login').classList.remove('hidden');else openTv('playlist');};
  $('#tv-guest').onclick=()=>{$('#tv-login').classList.add('hidden');notice('هذه معاينة، التشغيل يحتاج حساباً واشتراكاً');};
- $('#tv-login-form').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{
-    if($('#tv-use-free').checked){
-      const code=String(new FormData(e.target).get('source_code')||'').trim().toUpperCase();
-      if(!/^[A-Z0-9]{2,12}$/.test(code))throw new Error('أدخل كود المصدر مثل A1');
-      const data=await api('/api/free/'+code+'/catalog');
-      freeSourceCode=code;sessionStorage.setItem('akkad_free_source',code);catalog=Array.isArray(data.items)?data.items:[];
-      token='';refreshToken='';currentSession=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(refreshKey);
-      $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
-      notice('تم فتح المصدر المجاني: '+data.source.name);
-    }else{
-      freeSourceCode='';sessionStorage.removeItem('akkad_free_source');await login(e.target);
-      $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
-    }
-  }catch(err){notice(err.message);}finally{btn.disabled=false;}};
+ $('#tv-login-form').onsubmit=async e=>{
+  e.preventDefault();const button=$('#tv-login-submit');button.disabled=true;
+  try{
+   if(loginByCode){
+    const code=String(new FormData(e.target).get('source_code')||'').trim().toUpperCase();
+    if(!/^[A-Z0-9]{2,12}$/.test(code))throw Error('أدخل كوداً صحيحاً مثل A1');
+    const result=await api('/api/instant/free/'+code+'/sources');
+    if(!result.sources?.length)throw Error('الكود غير متاح');
+    freeSourceCode=code;activeSourceId='';sessionStorage.setItem('akkad_free_source',code);
+    if(!savedCodes.includes(code))savedCodes.push(code);
+    sessionStorage.setItem('akkad_account_codes',JSON.stringify(savedCodes.slice(-30)));
+    $('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();notice('تم فتح حساب '+code);
+   }else{
+    freeSourceCode='';activeSourceId='';sessionStorage.removeItem('akkad_free_source');
+    await login(e.target);$('#tv-login').classList.add('hidden');refreshUser();await loadCatalog();
+   }
+  }catch(err){notice(err.message)}finally{button.disabled=false}
+ };
+ $('#playlist-add-account').onclick=()=>{setLoginMode(true);$('#tv-login').classList.remove('hidden')};
+ $('#playlist-source').onchange=async e=>{
+  const next=e.target.value;
+  if(next.startsWith('code:')){
+   const code=next.slice(5);
+   try{await api('/api/instant/free/'+code+'/sources');freeSourceCode=code;activeSourceId='';sessionStorage.setItem('akkad_free_source',code)}
+   catch(err){return notice(err.message)}
+  }else{
+   if(!token)return notice('تحتاج تسجيل VIP للوصول إلى كل المزودين');
+   freeSourceCode='';sessionStorage.removeItem('akkad_free_source');activeSourceId=next;
+  }
+  hideWatch();refreshUser();await loadCatalog();
+ };
+ $('#playlist-all-sources').onclick=async()=>{
+  if(!token)return notice('سجّل VIP أولاً');
+  freeSourceCode='';activeSourceId='';sessionStorage.removeItem('akkad_free_source');
+  hideWatch();refreshUser();await loadCatalog();
+ };
+ for(const kind of ['live','movie','series'])$('#more-'+kind).onclick=async()=>{
+  const b=$('#more-'+kind);b.disabled=true;
+  try{await loadPage(kind,pageState[kind].loaded)}catch(e){notice(e.message)}finally{b.disabled=false}
+ };
  $('#setting-refresh').onclick=$('#playlist-refresh').onclick=()=>loadCatalog();
  $('#setting-login').onclick=()=>$('#tv-login').classList.remove('hidden');
  $('#setting-logout').onclick=logout;
